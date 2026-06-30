@@ -1,0 +1,48 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply font-sans text-gray-800 bg-white antialiased;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-navy text-white font-semibold px-6 py-3 rounded-lg hover:bg-navy-600 transition-all duration-200 shadow-sm hover:shadow-md active:scale-95;
+  }
+  .btn-secondary {
+    @apply bg-gold text-navy font-semibold px-6 py-3 rounded-lg hover:bg-gold-500 transition-all duration-200 shadow-sm hover:shadow-md active:scale-95;
+  }
+  .btn-outline {
+    @apply border-2 border-navy text-navy font-semibold px-6 py-3 rounded-lg hover:bg-navy hover:text-white transition-all duration-200 active:scale-95;
+  }
+  .card {
+    @apply bg-white rounded-2xl shadow-card hover:shadow-card-hover transition-all duration-300;
+  }
+  .input-field {
+    @apply w-full border border-gray-200 rounded-lg px-4 py-3 text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-navy/30 focus:border-navy transition-all duration-200;
+  }
+  .section-title {
+    @apply text-3xl md:text-4xl font-bold text-navy;
+  }
+  .section-subtitle {
+    @apply text-gray-500 text-lg mt-3;
+  }
+  .badge {
+    @apply inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full;
+  }
+}
+
+@layer utilities {
+  .text-gradient {
+    @apply bg-gradient-to-r from-navy to-navy-400 bg-clip-text text-transparent;
+  }
+  .gold-line {
+    @apply border-b-2 border-gold pb-1;
+  }
+}
