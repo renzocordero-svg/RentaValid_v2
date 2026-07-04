@@ -1,0 +1,622 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "RentaValid API",
+    "version": "0.1.0",
+    "description": "Contrato de la API de RentaValid (MVP). Toda respuesta usa el sobre uniforme:\n\n- Éxito: `{ \"data\": <payload> }`\n- Error: `{ \"error\": \"Mensaje legible en español\" }`\n\nLa autenticación es JWT (Bearer). El token se obtiene en `/auth/register` o `/auth/login` y contiene `{ id, roles }`. Vigencia: 7 días."
+  },
+  "servers": [
+    { "url": "http://localhost:4000", "description": "Desarrollo local" },
+    { "url": "https://TU-BACKEND.onrender.com", "description": "Producción (Render)" }
+  ],
+  "tags": [
+    { "name": "Auth", "description": "Registro, login y perfil (Miguel)" },
+    { "name": "KYC", "description": "Validación de identidad: DNI, correo, biometría (Mathias)" },
+    { "name": "Scoring", "description": "Scoring crediticio y tope de alquiler (Mathias)" },
+    { "name": "Properties", "description": "Inmuebles: publicación, búsqueda, detalle, postulación (Sebastian)" },
+    { "name": "Applications", "description": "Gestión de postulaciones (Sebastian)" },
+    { "name": "Contracts", "description": "Contrato con IA y firma digital (Renzo)" },
+    { "name": "Payments", "description": "Pagos, comisión 5% y garantía (Christian)" },
+    { "name": "System", "description": "Salud del servicio" }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": ["System"],
+        "summary": "Health check",
+        "responses": {
+          "200": {
+            "description": "Servicio operativo",
+            "content": { "application/json": { "schema": { "type": "object", "properties": { "status": { "type": "string", "example": "ok" } } } } }
+          }
+        }
+      }
+    },
+    "/auth/register": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Registrar una cuenta",
+        "description": "Crea un usuario con rol Arrendador o Arrendatario y devuelve el token JWT. La contraseña se guarda con bcrypt (cost 12).",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RegisterRequest" } } }
+        },
+        "responses": {
+          "201": { "description": "Usuario creado", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AuthResponse" } } } },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "409": { "description": "Correo o DNI ya registrado", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Iniciar sesión",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LoginRequest" } } }
+        },
+        "responses": {
+          "200": { "description": "Login exitoso", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AuthResponse" } } } },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "description": "Credenciales inválidas", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "tags": ["Auth"],
+        "summary": "Perfil del usuario autenticado",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Perfil", "content": { "application/json": { "schema": { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/User" } } } } } },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/kyc/dni": {
+      "post": {
+        "tags": ["KYC"],
+        "summary": "Consultar DNI (RENIEC vía JSON.pe, con mock de respaldo)",
+        "description": "Pública: se llama antes de tener token. Si JSON.pe falla o no hay créditos devuelve datos simulados con `mock: true`.",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "type": "object", "required": ["dni"], "properties": { "dni": { "type": "string", "pattern": "^\\d{8}$", "example": "47382910" } } } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Datos del titular",
+            "content": { "application/json": { "schema": { "type": "object", "properties": { "data": { "type": "object", "properties": { "nombres": { "type": "string" }, "apellidos": { "type": "string" }, "mock": { "type": "boolean" } } } } } } }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" }
+        }
+      }
+    },
+    "/kyc/send-code": {
+      "post": {
+        "tags": ["KYC"],
+        "summary": "Enviar código de verificación al correo",
+        "description": "Genera un código de 6 dígitos (vigencia 10 min) y lo envía por Nodemailer/Gmail. Requiere MAIL_USER y MAIL_PASS configurados (contraseña de aplicación de Google).",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "type": "object", "required": ["email"], "properties": { "email": { "type": "string", "format": "email" } } } } }
+        },
+        "responses": {
+          "200": { "description": "Correo enviado", "content": { "application/json": { "schema": { "type": "object", "properties": { "data": { "type": "object", "properties": { "enviado": { "type": "boolean", "example": true } } } } } } } },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "description": "Fallo de Gmail/Nodemailer", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/kyc/verify-email": {
+      "post": {
+        "tags": ["KYC"],
+        "summary": "Verificar el código de correo",
+        "description": "Valida el código de 6 dígitos. Si es correcto marca `identidadValidada = true` y elimina el código.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "type": "object", "required": ["code"], "properties": { "code": { "type": "string", "example": "123456" } } } } }
+        },
+        "responses": {
+          "200": { "description": "Correo verificado", "content": { "application/json": { "schema": { "type": "object", "properties": { "data": { "type": "object", "properties": { "verificado": { "type": "boolean", "example": true } } } } } } } },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/kyc/face": {
+      "post": {
+        "tags": ["KYC"],
+        "summary": "Validación biométrica (foto DNI + selfie)",
+        "description": "Multipart. En el MVP responde `match: true` sin procesar (demo) y marca `identidadValidada = true`.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "multipart/form-data": { "schema": { "type": "object", "required": ["dniFoto", "selfie"], "properties": { "dniFoto": { "type": "string", "format": "binary" }, "selfie": { "type": "string", "format": "binary" } } } } }
+        },
+        "responses": {
+          "200": { "description": "Identidad verificada", "content": { "application/json": { "schema": { "type": "object", "properties": { "data": { "type": "object", "properties": { "match": { "type": "boolean" }, "metodo": { "type": "string", "example": "demo" } } } } } } } },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/scoring": {
+      "post": {
+        "tags": ["Scoring"],
+        "summary": "Calcular scoring (solo Arrendatario)",
+        "description": "Calcula el tope de alquiler (50% del ingreso) y un puntaje ponderado. Guarda/actualiza el Score del arrendatario.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "type": "object", "required": ["ingreso"], "properties": { "ingreso": { "type": "number", "example": 4500 } } } } }
+        },
+        "responses": {
+          "200": { "description": "Score calculado", "content": { "application/json": { "schema": { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Score" } } } } } },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/scoring/me": {
+      "get": {
+        "tags": ["Scoring"],
+        "summary": "Obtener mi scoring",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Score existente", "content": { "application/json": { "schema": { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Score" } } } } } },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/properties": {
+      "get": {
+        "tags": ["Properties"],
+        "summary": "Listar inmuebles disponibles con filtros",
+        "description": "Pública. Todos los query params son opcionales. Solo devuelve inmuebles en estado Disponible.",
+        "parameters": [
+          { "name": "distrito", "in": "query", "schema": { "type": "string" } },
+          { "name": "tipo", "in": "query", "schema": { "$ref": "#/components/schemas/PropertyTipo" } },
+          { "name": "precioMin", "in": "query", "schema": { "type": "number" } },
+          { "name": "precioMax", "in": "query", "schema": { "type": "number" } },
+          { "name": "areaMin", "in": "query", "schema": { "type": "number" } },
+          { "name": "areaMax", "in": "query", "schema": { "type": "number" } },
+          { "name": "habitaciones", "in": "query", "description": "Mínimo de habitaciones (gte)", "schema": { "type": "integer" } },
+          { "name": "banos", "in": "query", "description": "Mínimo de baños (gte)", "schema": { "type": "integer" } },
+          { "name": "cochera", "in": "query", "schema": { "type": "boolean" } },
+          { "name": "amoblado", "in": "query", "schema": { "type": "boolean" } },
+          { "name": "orden", "in": "query", "schema": { "type": "string", "enum": ["precio_asc", "precio_desc", "area_asc", "area_desc", "reciente"], "default": "reciente" } }
+        ],
+        "responses": {
+          "200": { "description": "Lista de inmuebles", "content": { "application/json": { "schema": { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/Property" } } } } } } }
+        }
+      },
+      "post": {
+        "tags": ["Properties"],
+        "summary": "Publicar inmueble (solo Arrendador)",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PropertyCreateRequest" } } }
+        },
+        "responses": {
+          "201": { "description": "Inmueble creado", "content": { "application/json": { "schema": { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Property" } } } } } },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/properties/{id}": {
+      "get": {
+        "tags": ["Properties"],
+        "summary": "Detalle de un inmueble",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": {
+          "200": { "description": "Inmueble", "content": { "application/json": { "schema": { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Property" } } } } } },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/properties/{id}/fotos": {
+      "post": {
+        "tags": ["Properties"],
+        "summary": "Subir fotos a Cloudinary (solo Arrendador dueño)",
+        "description": "Multipart, campo `fotos`. Hasta 10 imágenes (JPG/PNG/WEBP, máx 5 MB c/u).",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": { "multipart/form-data": { "schema": { "type": "object", "properties": { "fotos": { "type": "array", "items": { "type": "string", "format": "binary" } } } } } }
+        },
+        "responses": {
+          "201": { "description": "Fotos subidas", "content": { "application/json": { "schema": { "type": "object", "properties": { "data": { "type": "object", "properties": { "subidas": { "type": "integer" }, "fotos": { "type": "array", "items": { "$ref": "#/components/schemas/PropertyPhoto" } }, "aviso": { "type": "string" } } } } } } } },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/properties/{id}/postular": {
+      "post": {
+        "tags": ["Properties"],
+        "summary": "Postular a un inmueble (solo Arrendatario)",
+        "description": "Sin body. Crea una Application en estado Pendiente.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": {
+          "201": { "description": "Postulación creada", "content": { "application/json": { "schema": { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Application" } } } } } },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "description": "Ya postulaste a este inmueble", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/applications/{id}": {
+      "patch": {
+        "tags": ["Applications"],
+        "summary": "Aceptar o rechazar una postulación (solo Arrendador dueño)",
+        "description": "Al aceptar, las demás postulaciones Pendientes del inmueble pasan a Rechazada y el inmueble pasa a Arrendado.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "type": "object", "required": ["estado"], "properties": { "estado": { "type": "string", "enum": ["Aceptada", "Rechazada"] } } } } }
+        },
+        "responses": {
+          "200": { "description": "Postulación actualizada", "content": { "application/json": { "schema": { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Application" } } } } } },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/contracts/generate": {
+      "post": {
+        "tags": ["Contracts"],
+        "summary": "Generar contrato con IA (solo Arrendador, postulación Aceptada)",
+        "description": "Usa Gemini para construir el contrato con la cláusula de allanamiento a futuro (Ley N° 30933).",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "type": "object", "required": ["applicationId"], "properties": { "applicationId": { "type": "integer" } } } } }
+        },
+        "responses": {
+          "201": { "description": "Contrato generado (Borrador)", "content": { "application/json": { "schema": { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Contract" } } } } } },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "description": "Postulación no aceptada o contrato ya existe", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "502": { "description": "Fallo de la IA (Gemini)", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/contracts/{id}": {
+      "get": {
+        "tags": ["Contracts"],
+        "summary": "Ver contrato (solo las partes)",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": {
+          "200": { "description": "Contrato", "content": { "application/json": { "schema": { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Contract" } } } } } },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "patch": {
+        "tags": ["Contracts"],
+        "summary": "Editar contenido del contrato (solo Borrador, ambas partes)",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "type": "object", "required": ["contenido"], "properties": { "contenido": { "type": "string" } } } } }
+        },
+        "responses": {
+          "200": { "description": "Contrato actualizado", "content": { "application/json": { "schema": { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Contract" } } } } } },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/contracts/{id}/sign": {
+      "post": {
+        "tags": ["Contracts"],
+        "summary": "Firmar contrato (reconfirma DNI + código de correo)",
+        "description": "Verifica el DNI del perfil y un código de verificación vigente, genera un hash SHA-256 (contenido + timestamp + userId) y crea la firma. Cuando ambas partes firman, el contrato pasa a Firmado con su hashFirma y sello de tiempo.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "type": "object", "required": ["codigo", "dni"], "properties": { "codigo": { "type": "string", "description": "Código de verificación por correo vigente" }, "dni": { "type": "string" } } } } }
+        },
+        "responses": {
+          "200": { "description": "Firma registrada", "content": { "application/json": { "schema": { "type": "object", "properties": { "data": { "type": "object", "properties": { "signature": { "$ref": "#/components/schemas/Signature" }, "contratoFirmado": { "type": "boolean" } } } } } } } },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/payments": {
+      "get": {
+        "tags": ["Payments"],
+        "summary": "Listar pagos del usuario (arrendador o arrendatario)",
+        "description": "Añade el campo calculado `estadoEfectivo` (Pendiente | Pagado | Atrasado).",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "contractId", "in": "query", "schema": { "type": "integer" } }],
+        "responses": {
+          "200": { "description": "Lista de pagos", "content": { "application/json": { "schema": { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/Payment" } } } } } } },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      },
+      "post": {
+        "tags": ["Payments"],
+        "summary": "Registrar pago (solo Arrendatario, contrato Firmado)",
+        "description": "Comisión = 5% del monto (0 si es devolución de garantía).",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "type": "object", "required": ["contractId", "monto", "periodo"], "properties": { "contractId": { "type": "integer" }, "monto": { "type": "number" }, "periodo": { "type": "string", "example": "2026-07", "description": "Formato YYYY-MM" } } } } }
+        },
+        "responses": {
+          "201": { "description": "Pago registrado", "content": { "application/json": { "schema": { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Payment" } } } } } },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "description": "Ya existe un pago para este periodo", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/payments/garantia": {
+      "post": {
+        "tags": ["Payments"],
+        "summary": "Registrar devolución de garantía (solo Arrendador)",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "type": "object", "required": ["contractId"], "properties": { "contractId": { "type": "integer" } } } } }
+        },
+        "responses": {
+          "201": { "description": "Garantía devuelta", "content": { "application/json": { "schema": { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Payment" } } } } } },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "description": "La garantía ya fue devuelta", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/payments/{id}/confirm": {
+      "patch": {
+        "tags": ["Payments"],
+        "summary": "Confirmar recepción del pago (solo Arrendador)",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": {
+          "200": { "description": "Pago confirmado", "content": { "application/json": { "schema": { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Payment" } } } } } },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": { "type": "http", "scheme": "bearer", "bearerFormat": "JWT" }
+    },
+    "responses": {
+      "BadRequest": { "description": "Petición inválida", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+      "Unauthorized": { "description": "Token requerido, inválido o expirado", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+      "Forbidden": { "description": "Sin permiso para esta acción", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+      "NotFound": { "description": "Recurso no encontrado", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": { "error": { "type": "string", "example": "Mensaje legible en español" } }
+      },
+      "RolNombre": { "type": "string", "enum": ["Arrendador", "Arrendatario", "Admin"] },
+      "PropertyTipo": { "type": "string", "enum": ["Departamento", "Casa", "Studio", "Oficina"] },
+      "PropertyEstado": { "type": "string", "enum": ["Disponible", "Arrendado", "Inactivo"] },
+      "ApplicationEstado": { "type": "string", "enum": ["Pendiente", "Aceptada", "Rechazada"] },
+      "ScoreDecision": { "type": "string", "enum": ["Aprobado", "Observado"] },
+      "ContractEstado": { "type": "string", "enum": ["Borrador", "Activo", "Firmado", "Finalizado", "Cancelado"] },
+      "PaymentEstado": { "type": "string", "enum": ["Pendiente", "Pagado", "Atrasado"] },
+      "RegisterRequest": {
+        "type": "object",
+        "required": ["nombre", "apellidoPaterno", "apellidoMaterno", "dni", "email", "telefono", "password", "rol"],
+        "properties": {
+          "nombre": { "type": "string", "example": "Diego" },
+          "apellidoPaterno": { "type": "string", "example": "Salinas" },
+          "apellidoMaterno": { "type": "string", "example": "Vega" },
+          "dni": { "type": "string", "example": "47382910" },
+          "email": { "type": "string", "format": "email", "example": "diego@gmail.com" },
+          "telefono": { "type": "string", "example": "+51 987 654 321" },
+          "password": { "type": "string", "format": "password", "example": "MiClave123!" },
+          "rol": { "type": "string", "enum": ["Arrendador", "Arrendatario"] }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "required": ["email", "password"],
+        "properties": {
+          "email": { "type": "string", "format": "email", "example": "diego.salinas@gmail.com" },
+          "password": { "type": "string", "format": "password", "example": "Demo1234!" }
+        }
+      },
+      "AuthResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "token": { "type": "string", "description": "JWT (Bearer). Vigencia 7 días." },
+              "user": { "$ref": "#/components/schemas/User" }
+            }
+          }
+        }
+      },
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "nombre": { "type": "string" },
+          "apellidoPaterno": { "type": "string" },
+          "apellidoMaterno": { "type": "string" },
+          "dni": { "type": "string" },
+          "email": { "type": "string", "format": "email" },
+          "telefono": { "type": "string" },
+          "fotoUrl": { "type": "string", "nullable": true },
+          "identidadValidada": { "type": "boolean" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "roles": { "type": "array", "items": { "$ref": "#/components/schemas/RolNombre" }, "description": "Array de nombres de rol, ej. [\"Arrendatario\"]" }
+        }
+      },
+      "PropertyPhoto": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "propertyId": { "type": "integer" },
+          "url": { "type": "string", "format": "uri" },
+          "orden": { "type": "integer" }
+        }
+      },
+      "PropertyCreateRequest": {
+        "type": "object",
+        "required": ["titulo", "descripcion", "direccion", "distrito", "tipo", "area", "habitaciones", "banos", "precio"],
+        "properties": {
+          "titulo": { "type": "string" },
+          "descripcion": { "type": "string" },
+          "direccion": { "type": "string" },
+          "distrito": { "type": "string" },
+          "tipo": { "$ref": "#/components/schemas/PropertyTipo" },
+          "area": { "type": "number" },
+          "habitaciones": { "type": "integer" },
+          "banos": { "type": "integer" },
+          "precio": { "type": "number" },
+          "mesesGarantia": { "type": "integer", "default": 2 },
+          "cochera": { "type": "boolean", "default": false },
+          "amoblado": { "type": "boolean", "default": false },
+          "fotos": { "type": "array", "items": { "type": "object", "properties": { "url": { "type": "string", "format": "uri" }, "orden": { "type": "integer" } } } }
+        }
+      },
+      "Property": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "arrendadorId": { "type": "integer" },
+          "titulo": { "type": "string" },
+          "descripcion": { "type": "string" },
+          "direccion": { "type": "string" },
+          "distrito": { "type": "string" },
+          "area": { "type": "number" },
+          "habitaciones": { "type": "integer" },
+          "banos": { "type": "integer" },
+          "cochera": { "type": "boolean" },
+          "amoblado": { "type": "boolean" },
+          "precio": { "type": "number" },
+          "mesesGarantia": { "type": "integer" },
+          "tipo": { "$ref": "#/components/schemas/PropertyTipo" },
+          "estado": { "$ref": "#/components/schemas/PropertyEstado" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "fotos": { "type": "array", "items": { "$ref": "#/components/schemas/PropertyPhoto" } },
+          "arrendador": { "type": "object", "properties": { "id": { "type": "integer" }, "nombre": { "type": "string" }, "apellidoPaterno": { "type": "string" }, "fotoUrl": { "type": "string", "nullable": true } } },
+          "applications": { "type": "array", "items": { "$ref": "#/components/schemas/Application" } }
+        }
+      },
+      "Application": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "propertyId": { "type": "integer" },
+          "arrendatarioId": { "type": "integer" },
+          "estado": { "$ref": "#/components/schemas/ApplicationEstado" },
+          "createdAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Score": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "arrendatarioId": { "type": "integer" },
+          "ingreso": { "type": "number" },
+          "topeAlquiler": { "type": "number", "description": "50% del ingreso" },
+          "decision": { "$ref": "#/components/schemas/ScoreDecision" },
+          "detalle": {
+            "type": "object",
+            "properties": {
+              "puntajeTotal": { "type": "integer" },
+              "stars": { "type": "integer" },
+              "vigenciaMeses": { "type": "integer" },
+              "dimensiones": { "type": "object" }
+            }
+          },
+          "createdAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Contract": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "applicationId": { "type": "integer" },
+          "contenido": { "type": "string" },
+          "clausulas": { "type": "array", "items": { "type": "object", "properties": { "numero": { "type": "integer" }, "titulo": { "type": "string" }, "texto": { "type": "string" }, "ley": { "type": "string" } } } },
+          "monto": { "type": "number" },
+          "garantia": { "type": "number" },
+          "fechaInicio": { "type": "string", "format": "date-time" },
+          "fechaFin": { "type": "string", "format": "date-time" },
+          "estado": { "$ref": "#/components/schemas/ContractEstado" },
+          "hashFirma": { "type": "string", "nullable": true },
+          "firmadoAt": { "type": "string", "format": "date-time", "nullable": true },
+          "createdAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Signature": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "contractId": { "type": "integer" },
+          "userId": { "type": "integer" },
+          "tipo": { "type": "string", "enum": ["Arrendador", "Arrendatario"] },
+          "hash": { "type": "string", "description": "SHA-256 de contenido + timestamp + userId" },
+          "ip": { "type": "string" },
+          "createdAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Payment": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "contractId": { "type": "integer" },
+          "periodo": { "type": "string", "example": "2026-07" },
+          "monto": { "type": "number" },
+          "comision": { "type": "number", "description": "5% del monto" },
+          "estado": { "$ref": "#/components/schemas/PaymentEstado" },
+          "estadoEfectivo": { "$ref": "#/components/schemas/PaymentEstado" },
+          "fechaPago": { "type": "string", "format": "date-time", "nullable": true },
+          "createdAt": { "type": "string", "format": "date-time" }
+        }
+      }
+    }
+  }
+}

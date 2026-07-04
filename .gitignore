@@ -22,3 +22,6 @@ Thumbs.db
 
 # Prisma
 backend/prisma/*.db
+
+.claude/
+.agents/
