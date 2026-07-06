@@ -52,37 +52,39 @@ function useDebounce(value, ms = 400) {
 }
 
 // ─── PropertyCard ─────────────────────────────────────────────────────────────
+// La API ahora devuelve campos en inglés: title, district, bedrooms, bathrooms,
+// price, hasGarage, isFurnished, type, address, images[] (array de URLs)
 
 function PropertyCard({ property, view }) {
-  const foto = property.fotos?.[0]?.url || 'https://placehold.co/600x400/1B2A4A/C9A84C?text=Sin+foto'
+  const foto = property.images?.[0] || 'https://placehold.co/600x400/1B2A4A/C9A84C?text=Sin+foto'
 
   if (view === 'list') {
     return (
       <Link to={`/inmuebles/${property.id}`} className="card flex group overflow-hidden">
         <div className="relative w-48 sm:w-56 flex-shrink-0 overflow-hidden">
-          <img src={foto} alt={property.titulo} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+          <img src={foto} alt={property.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
           <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#1B2A4A] text-white">
-            {property.tipo}
+            {property.type}
           </span>
         </div>
         <div className="flex-1 p-4 flex flex-col min-w-0">
           <div className="flex items-center gap-1.5 text-xs text-[#C9A84C] font-semibold mb-1">
-            <MapPin size={11} /> {property.distrito}
+            <MapPin size={11} /> {property.district}
           </div>
           <h3 className="font-bold text-[#1B2A4A] text-sm leading-snug line-clamp-2 mb-1 group-hover:text-[#C9A84C] transition-colors">
-            {property.titulo}
+            {property.title}
           </h3>
-          <p className="text-xs text-gray-400 mb-2 truncate">{property.direccion}</p>
+          <p className="text-xs text-gray-400 mb-2 truncate">{property.address}</p>
           <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500 mb-2">
-            <span className="flex items-center gap-1"><BedDouble size={12} className="text-[#1B2A4A]/50" /> <strong>{property.habitaciones}</strong> hab.</span>
-            <span className="flex items-center gap-1"><Bath size={12} className="text-[#1B2A4A]/50" /> <strong>{property.banos}</strong> baños</span>
+            <span className="flex items-center gap-1"><BedDouble size={12} className="text-[#1B2A4A]/50" /> <strong>{property.bedrooms}</strong> hab.</span>
+            <span className="flex items-center gap-1"><Bath size={12} className="text-[#1B2A4A]/50" /> <strong>{property.bathrooms}</strong> baños</span>
             <span className="flex items-center gap-1"><Maximize2 size={12} className="text-[#1B2A4A]/50" /> <strong>{property.area}</strong> m²</span>
-            {property.cochera && <span className="flex items-center gap-1"><Car size={12} className="text-[#1B2A4A]/50" /> Cochera</span>}
-            {property.amoblado && <span className="flex items-center gap-1"><Sofa size={12} className="text-[#1B2A4A]/50" /> Amoblado</span>}
+            {property.hasGarage  && <span className="flex items-center gap-1"><Car  size={12} className="text-[#1B2A4A]/50" /> Cochera</span>}
+            {property.isFurnished && <span className="flex items-center gap-1"><Sofa size={12} className="text-[#1B2A4A]/50" /> Amoblado</span>}
           </div>
           <div className="mt-auto flex items-center justify-between pt-2 border-t border-gray-100">
             <div>
-              <span className="text-xl font-extrabold text-[#1B2A4A]">{priceLabel(property.precio)}</span>
+              <span className="text-xl font-extrabold text-[#1B2A4A]">{priceLabel(property.price)}</span>
               <span className="text-xs text-gray-400">/mes</span>
             </div>
             <span className="inline-flex items-center gap-1.5 bg-[#1B2A4A] text-white text-xs font-semibold px-4 py-2 rounded-xl group-hover:bg-[#C9A84C] group-hover:text-[#1B2A4A] transition-all">
@@ -97,37 +99,37 @@ function PropertyCard({ property, view }) {
   return (
     <Link to={`/inmuebles/${property.id}`} className="card flex flex-col group overflow-hidden">
       <div className="relative h-48 overflow-hidden flex-shrink-0">
-        <img src={foto} alt={property.titulo} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+        <img src={foto} alt={property.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent pointer-events-none" />
         <span className="absolute top-3 left-3 text-[10px] font-bold px-2.5 py-1 rounded-full bg-[#1B2A4A]/90 text-white">
-          {property.tipo}
+          {property.type}
         </span>
         <div className="absolute bottom-3 left-3">
           <span className="inline-flex items-center gap-1 text-white text-[10px] font-semibold bg-black/20 backdrop-blur-sm px-2.5 py-1 rounded-full">
-            <MapPin size={9} /> {property.distrito}
+            <MapPin size={9} /> {property.district}
           </span>
         </div>
-        {(property.cochera || property.amoblado) && (
+        {(property.hasGarage || property.isFurnished) && (
           <div className="absolute bottom-3 right-3 flex gap-1">
-            {property.cochera  && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#C9A84C]/90 text-[#1B2A4A]"><Car size={9} className="inline" /></span>}
-            {property.amoblado && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#C9A84C]/90 text-[#1B2A4A]"><Sofa size={9} className="inline" /></span>}
+            {property.hasGarage   && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#C9A84C]/90 text-[#1B2A4A]"><Car  size={9} className="inline" /></span>}
+            {property.isFurnished && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#C9A84C]/90 text-[#1B2A4A]"><Sofa size={9} className="inline" /></span>}
           </div>
         )}
       </div>
       <div className="flex-1 p-4 flex flex-col">
         <h3 className="font-bold text-[#1B2A4A] text-sm leading-snug line-clamp-2 mb-2 group-hover:text-[#C9A84C] transition-colors">
-          {property.titulo}
+          {property.title}
         </h3>
         <div className="flex items-center gap-3 text-xs text-gray-500 mb-3">
-          <span className="flex items-center gap-1"><BedDouble size={12} className="text-[#1B2A4A]/40" /> <strong className="text-gray-700">{property.habitaciones}</strong></span>
+          <span className="flex items-center gap-1"><BedDouble size={12} className="text-[#1B2A4A]/40" /> <strong className="text-gray-700">{property.bedrooms}</strong></span>
           <span className="text-gray-200">|</span>
-          <span className="flex items-center gap-1"><Bath size={12} className="text-[#1B2A4A]/40" /> <strong className="text-gray-700">{property.banos}</strong></span>
+          <span className="flex items-center gap-1"><Bath size={12} className="text-[#1B2A4A]/40" /> <strong className="text-gray-700">{property.bathrooms}</strong></span>
           <span className="text-gray-200">|</span>
           <span className="flex items-center gap-1"><Maximize2 size={12} className="text-[#1B2A4A]/40" /> <strong className="text-gray-700">{property.area}</strong> m²</span>
         </div>
         <div className="mt-auto pt-3 border-t border-gray-100 flex items-center justify-between">
           <div>
-            <p className="text-lg font-extrabold text-[#1B2A4A]">{priceLabel(property.precio)}</p>
+            <p className="text-lg font-extrabold text-[#1B2A4A]">{priceLabel(property.price)}</p>
             <p className="text-[10px] text-gray-400">por mes</p>
           </div>
           <span className="inline-flex items-center gap-1.5 bg-[#1B2A4A] text-white text-xs font-semibold px-3.5 py-2 rounded-xl group-hover:bg-[#C9A84C] group-hover:text-[#1B2A4A] transition-all duration-200">
@@ -378,11 +380,11 @@ export default function SearchPage() {
   const [searchParams] = useSearchParams()
   const { hasRole } = useAuthStore()
 
-  const [view, setView]           = useState('grid')
+  const [view, setView]               = useState('grid')
   const [showSidebar, setShowSidebar] = useState(false)
-  const [query, setQuery]         = useState('')
-  const [orden, setOrden]         = useState('reciente')
-  const [filters, setFilters]     = useState(() => ({
+  const [query, setQuery]             = useState('')
+  const [orden, setOrden]             = useState('recent')
+  const [filters, setFilters]         = useState(() => ({
     ...INIT_FILTERS,
     distritos: searchParams.get('distrito') ? [searchParams.get('distrito')] : [],
   }))
@@ -393,20 +395,25 @@ export default function SearchPage() {
 
   const debQuery = useDebounce(query)
 
-  // Construye los query params para la API
+  // Construye query params en inglés (spec) para la API
   const buildParams = useCallback(() => {
-    const params = { orden }
-    const range = PRICE_RANGES[filters.priceRange]
-    if (filters.distritos.length === 1)   params.distrito    = filters.distritos[0]
-    if (filters.tipos.length === 1)       params.tipo        = filters.tipos[0]
-    if (filters.habitaciones)             params.habitaciones = filters.habitaciones
-    if (filters.banos)                    params.banos        = filters.banos
-    if (filters.cochera)                  params.cochera      = 'true'
-    if (filters.amoblado)                 params.amoblado     = 'true'
-    if (filters.areaMin)                  params.areaMin      = filters.areaMin
-    if (filters.areaMax)                  params.areaMax      = filters.areaMax
-    if (filters.precioMin || (range && range.min > 0))   params.precioMin = filters.precioMin || range?.min
-    if (filters.precioMax || (range && range.max !== Infinity)) params.precioMax = filters.precioMax || range?.max
+    const params = { sort: orden }
+    const range  = PRICE_RANGES[filters.priceRange]
+
+    // district (API acepta uno; multi-distrito se filtra localmente)
+    if (filters.distritos.length === 1) params.district   = filters.distritos[0]
+    if (filters.tipos.length === 1)     params.type       = filters.tipos[0]
+    if (filters.habitaciones)           params.bedrooms   = filters.habitaciones
+    if (filters.banos)                  params.bathrooms  = filters.banos
+    if (filters.cochera)                params.hasGarage  = 'true'
+    if (filters.amoblado)               params.isFurnished = 'true'
+    if (filters.areaMin)                params.minArea    = filters.areaMin
+    if (filters.areaMax)                params.maxArea    = filters.areaMax
+    if (filters.precioMin || (range && range.min > 0))
+      params.minPrice = filters.precioMin || range?.min
+    if (filters.precioMax || (range && range.max !== Infinity))
+      params.maxPrice = filters.precioMax || range?.max
+
     return params
   }, [filters, orden])
 
@@ -416,33 +423,30 @@ export default function SearchPage() {
     setLoading(true)
     setError(null)
 
-    const { propertiesService: svc } = { propertiesService }
-    import('../services/properties').then(({ propertiesService: svc }) => {
-      svc.listar(buildParams())
-        .then(data => {
-          if (cancelled) return
-          // Filtro local por texto (el backend no tiene búsqueda full-text aún)
-          const q = debQuery.toLowerCase().trim()
-          const filtered = q
-            ? data.filter(p =>
-                p.titulo?.toLowerCase().includes(q) ||
-                p.distrito?.toLowerCase().includes(q) ||
-                p.direccion?.toLowerCase().includes(q)
-              )
-            : data
-          // Filtro multi-distrito (la API solo acepta uno; aplicamos el resto localmente)
-          const multiDist = filters.distritos.length > 1
-            ? filtered.filter(p => filters.distritos.includes(p.distrito))
-            : filtered
-          // Filtro multi-tipo
-          const multiTipo = filters.tipos.length > 1
-            ? multiDist.filter(p => filters.tipos.includes(p.tipo))
-            : multiDist
-          setProperties(multiTipo)
-        })
-        .catch(() => { if (!cancelled) setError('No se pudo conectar con el servidor') })
-        .finally(() => { if (!cancelled) setLoading(false) })
-    })
+    propertiesService.listar(buildParams())
+      .then(data => {
+        if (cancelled) return
+        // Filtro local por texto
+        const q = debQuery.toLowerCase().trim()
+        const filtered = q
+          ? data.filter(p =>
+              p.title?.toLowerCase().includes(q) ||
+              p.district?.toLowerCase().includes(q) ||
+              p.address?.toLowerCase().includes(q)
+            )
+          : data
+        // Filtro multi-distrito local
+        const multiDist = filters.distritos.length > 1
+          ? filtered.filter(p => filters.distritos.includes(p.district))
+          : filtered
+        // Filtro multi-tipo local
+        const multiTipo = filters.tipos.length > 1
+          ? multiDist.filter(p => filters.tipos.includes(p.type))
+          : multiDist
+        setProperties(multiTipo)
+      })
+      .catch(() => { if (!cancelled) setError('No se pudo conectar con el servidor') })
+      .finally(() => { if (!cancelled) setLoading(false) })
 
     return () => { cancelled = true }
   }, [buildParams, debQuery, filters.distritos, filters.tipos])
@@ -554,9 +558,9 @@ export default function SearchPage() {
                 <div className="relative">
                   <select value={orden} onChange={e => setOrden(e.target.value)}
                     className="appearance-none pl-3 pr-8 py-2 text-xs border border-gray-200 rounded-xl text-gray-600 bg-white focus:outline-none focus:ring-2 focus:ring-[#1B2A4A]/20 font-medium cursor-pointer">
-                    <option value="reciente">Más recientes</option>
-                    <option value="precio_asc">Menor precio</option>
-                    <option value="precio_desc">Mayor precio</option>
+                    <option value="recent">Más recientes</option>
+                    <option value="price_asc">Menor precio</option>
+                    <option value="price_desc">Mayor precio</option>
                     <option value="area_desc">Mayor área</option>
                     <option value="area_asc">Menor área</option>
                   </select>
