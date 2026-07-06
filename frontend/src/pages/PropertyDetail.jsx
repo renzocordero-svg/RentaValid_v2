@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import {
   MapPin, BedDouble, Bath, Maximize2, Car, Sofa, Shield,
   ChevronLeft, ChevronRight, Check, Phone, MessageSquare,
   Share2, Heart, Building2, Calendar, Loader2, AlertCircle,
-  X, ZoomIn,
+  X, ZoomIn, CheckCircle2, XCircle,
 } from 'lucide-react'
 import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
@@ -12,13 +12,14 @@ import { propertiesService } from '../services/properties'
 import { useAuthStore } from '../store/authStore'
 
 // ─── Galería de fotos ─────────────────────────────────────────────────────────
+// Recibe `images`: array de strings (URLs) — formato del nuevo contrato de API
 
-function Gallery({ fotos }) {
-  const [idx, setIdx]     = useState(0)
+function Gallery({ images }) {
+  const [idx, setIdx]         = useState(0)
   const [lightbox, setLightbox] = useState(false)
 
-  const imgs = fotos?.length
-    ? fotos.map(f => f.url)
+  const imgs = images?.length
+    ? images
     : ['https://placehold.co/900x600/1B2A4A/C9A84C?text=Sin+fotos']
 
   const prev = () => setIdx(i => (i - 1 + imgs.length) % imgs.length)
@@ -113,6 +114,11 @@ function StatBox({ icon: Icon, label, value }) {
   )
 }
 
+// ── Etiqueta visible de estado de Application (inglés → español para la UI) ──
+function statusLabel(status) {
+  return status === 'accepted' ? 'Aceptada' : status === 'rejected' ? 'Rechazada' : 'Pendiente'
+}
+
 // ─── PropertyDetail ───────────────────────────────────────────────────────────
 
 export default function PropertyDetail() {
@@ -120,23 +126,25 @@ export default function PropertyDetail() {
   const navigate = useNavigate()
   const { user, isAuthenticated, hasRole } = useAuthStore()
 
-  const [property, setProperty] = useState(null)
-  const [loading, setLoading]   = useState(true)
-  const [error, setError]       = useState(null)
+  const [property, setProperty]       = useState(null)
+  const [loading, setLoading]         = useState(true)
+  const [error, setError]             = useState(null)
 
-  const [saved, setSaved]         = useState(false)
-  const [applying, setApplying]   = useState(false)
-  const [applied, setApplied]     = useState(false)
-  const [applyError, setApplyError] = useState(null)
+  const [saved, setSaved]             = useState(false)
+  const [applying, setApplying]       = useState(false)
+  const [applied, setApplied]         = useState(false)
+  const [applyError, setApplyError]   = useState(null)
+  const [updatingApp, setUpdatingApp] = useState(null)  // applicationId en curso
+  const [appError, setAppError]       = useState(null)
 
   useEffect(() => {
     setLoading(true)
     propertiesService.obtenerPorId(id)
       .then(data => {
         setProperty(data)
-        // Verificar si el usuario ya postuló
+        // Verificar si el usuario ya aplicó — campo spec: userId
         if (user && data.applications) {
-          const yaPostulo = data.applications.some(a => a.arrendatarioId === user.id)
+          const yaPostulo = data.applications.some(a => a.userId === user.id)
           setApplied(yaPostulo)
         }
       })
@@ -144,6 +152,7 @@ export default function PropertyDetail() {
       .finally(() => setLoading(false))
   }, [id, user])
 
+  // Postular — usa el endpoint /apply (spec)
   const handlePostular = async () => {
     if (!isAuthenticated()) {
       navigate('/registro?redirect=' + encodeURIComponent(`/inmuebles/${id}`))
@@ -152,7 +161,7 @@ export default function PropertyDetail() {
     setApplying(true)
     setApplyError(null)
     try {
-      await propertiesService.postular(id)
+      await propertiesService.applyToProperty(id)
       setApplied(true)
     } catch (err) {
       setApplyError(err.response?.data?.error || 'Error al postular. Intenta de nuevo.')
@@ -160,6 +169,27 @@ export default function PropertyDetail() {
       setApplying(false)
     }
   }
+
+  // Aceptar / Rechazar — usa updateApplication con status en inglés (spec)
+  const handleActualizar = useCallback(async (appId, status) => {
+    setUpdatingApp(appId)
+    setAppError(null)
+    try {
+      const updated = await propertiesService.updateApplication(appId, status)
+      setProperty(prev => ({
+        ...prev,
+        applications: prev.applications.map(a =>
+          a.id === appId ? { ...a, status: updated.status } : a
+        ),
+        // Si se aceptó, marcar el inmueble como Arrendado en la UI
+        status: status === 'accepted' ? 'Arrendado' : prev.status,
+      }))
+    } catch (err) {
+      setAppError(err.response?.data?.error || 'Error al actualizar la postulación')
+    } finally {
+      setUpdatingApp(null)
+    }
+  }, [])
 
   // ── Loading ──
   if (loading) {
@@ -196,13 +226,14 @@ export default function PropertyDetail() {
     )
   }
 
-  const esArrendador = property.arrendadorId === user?.id
+  // ── Campos del contrato API en inglés ──
+  const esArrendador  = property.ownerId === user?.id
   const puedePostular = !esArrendador && hasRole('Arrendatario')
-  const garantiaTotal = property.precio * property.mesesGarantia
-  const totalInicial  = garantiaTotal + property.precio
+  const garantiaTotal = property.price * property.guarantee
+  const totalInicial  = garantiaTotal + property.price
 
-  const arrendadorNombre = property.arrendador
-    ? `${property.arrendador.nombre} ${property.arrendador.apellidoPaterno}`
+  const arrendadorNombre = property.owner
+    ? `${property.owner.nombre} ${property.owner.apellidoPaterno}`
     : 'Propietario'
 
   return (
@@ -217,9 +248,9 @@ export default function PropertyDetail() {
               <ChevronLeft size={14} /> Inmuebles
             </Link>
             <span>/</span>
-            <span className="text-gray-500">{property.distrito}</span>
+            <span className="text-gray-500">{property.district}</span>
             <span>/</span>
-            <span className="text-[#1B2A4A] font-medium truncate max-w-xs">{property.titulo}</span>
+            <span className="text-[#1B2A4A] font-medium truncate max-w-xs">{property.title}</span>
           </div>
         </div>
 
@@ -229,24 +260,24 @@ export default function PropertyDetail() {
             {/* ── Columna izquierda ── */}
             <div className="lg:col-span-2">
 
-              {/* Galería */}
-              <Gallery fotos={property.fotos} />
+              {/* Galería — images es array de URLs (string[]) */}
+              <Gallery images={property.images} />
 
               {/* Título y badges */}
               <div className="flex flex-wrap items-start justify-between gap-4 mt-5 mb-4">
                 <div>
                   <div className="flex flex-wrap gap-2 mb-2">
-                    <span className="badge bg-[#1B2A4A]/10 text-[#1B2A4A]">{property.tipo}</span>
-                    {property.amoblado && <span className="badge bg-[#C9A84C]/15 text-[#b8943f]">Amoblado</span>}
-                    {property.cochera  && <span className="badge bg-gray-100 text-gray-600">Cochera</span>}
-                    <span className={`badge ${property.estado === 'Disponible' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
-                      {property.estado}
+                    <span className="badge bg-[#1B2A4A]/10 text-[#1B2A4A]">{property.type}</span>
+                    {property.isFurnished && <span className="badge bg-[#C9A84C]/15 text-[#b8943f]">Amoblado</span>}
+                    {property.hasGarage   && <span className="badge bg-gray-100 text-gray-600">Cochera</span>}
+                    <span className={`badge ${property.status === 'Disponible' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
+                      {property.status}
                     </span>
                   </div>
-                  <h1 className="text-xl sm:text-2xl font-bold text-[#1B2A4A]">{property.titulo}</h1>
+                  <h1 className="text-xl sm:text-2xl font-bold text-[#1B2A4A]">{property.title}</h1>
                   <div className="flex items-center gap-1.5 mt-1.5 text-gray-500 text-sm">
                     <MapPin size={14} className="text-[#C9A84C]" />
-                    {property.direccion}, {property.distrito}
+                    {property.address}, {property.district}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -264,55 +295,103 @@ export default function PropertyDetail() {
 
               {/* Stats */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-                <StatBox icon={BedDouble}  label="Habitaciones" value={property.habitaciones} />
-                <StatBox icon={Bath}       label="Baños"        value={property.banos} />
-                <StatBox icon={Maximize2}  label="Área"         value={`${property.area} m²`} />
-                <StatBox icon={Building2}  label="Tipo"         value={property.tipo} />
+                <StatBox icon={BedDouble} label="Habitaciones" value={property.bedrooms} />
+                <StatBox icon={Bath}      label="Baños"        value={property.bathrooms} />
+                <StatBox icon={Maximize2} label="Área"         value={`${property.area} m²`} />
+                <StatBox icon={Building2} label="Tipo"         value={property.type} />
               </div>
 
               {/* Descripción */}
               <div className="card p-5 mb-4">
                 <h2 className="font-bold text-[#1B2A4A] mb-3">Descripción</h2>
-                <p className="text-gray-600 text-sm leading-relaxed">{property.descripcion}</p>
+                <p className="text-gray-600 text-sm leading-relaxed">{property.description}</p>
               </div>
 
               {/* Características adicionales */}
-              {(property.cochera || property.amoblado) && (
+              {(property.hasGarage || property.isFurnished) && (
                 <div className="card p-5 mb-4">
                   <h2 className="font-bold text-[#1B2A4A] mb-3">Características</h2>
                   <div className="grid grid-cols-2 gap-3">
-                    {property.cochera  && <div className="flex items-center gap-2 text-sm text-gray-600"><Car  size={15} className="text-[#C9A84C]" /> Cochera incluida</div>}
-                    {property.amoblado && <div className="flex items-center gap-2 text-sm text-gray-600"><Sofa size={15} className="text-[#C9A84C]" /> Totalmente amoblado</div>}
+                    {property.hasGarage   && <div className="flex items-center gap-2 text-sm text-gray-600"><Car  size={15} className="text-[#C9A84C]" /> Cochera incluida</div>}
+                    {property.isFurnished && <div className="flex items-center gap-2 text-sm text-gray-600"><Sofa size={15} className="text-[#C9A84C]" /> Totalmente amoblado</div>}
                   </div>
                 </div>
               )}
 
-              {/* Postulaciones (solo si es el arrendador) */}
-              {esArrendador && property.applications?.length > 0 && (
+              {/* Postulaciones (solo si es el arrendador dueño) */}
+              {esArrendador && (
                 <div className="card p-5 mb-4">
                   <h2 className="font-bold text-[#1B2A4A] mb-3">
                     Postulaciones recibidas
-                    <span className="ml-2 text-sm font-normal text-gray-400">({property.applications.length})</span>
+                    <span className="ml-2 text-sm font-normal text-gray-400">
+                      ({property.applications?.length ?? 0})
+                    </span>
                   </h2>
-                  <div className="space-y-2">
-                    {property.applications.map(app => (
-                      <div key={app.id} className="flex items-center justify-between py-2 px-3 rounded-xl bg-gray-50">
-                        <div>
-                          <p className="text-sm font-semibold text-[#1B2A4A]">
-                            {app.arrendatario?.nombre} {app.arrendatario?.apellidoPaterno}
-                          </p>
-                          <p className="text-xs text-gray-400">{app.arrendatario?.email}</p>
+
+                  {appError && (
+                    <div className="mb-3 p-3 rounded-xl bg-red-50 border border-red-200 text-red-600 text-xs flex items-center gap-2">
+                      <AlertCircle size={13} className="flex-shrink-0" />
+                      {appError}
+                    </div>
+                  )}
+
+                  {(!property.applications || property.applications.length === 0) ? (
+                    <p className="text-gray-400 text-sm">Aún no hay postulaciones para este inmueble.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {property.applications.map(app => (
+                        <div key={app.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-3 px-4 rounded-xl bg-gray-50 border border-gray-100">
+                          <div className="min-w-0">
+                            {/* app.user viene de arrendatario (campos en español internos) */}
+                            <p className="text-sm font-semibold text-[#1B2A4A]">
+                              {app.user?.nombre} {app.user?.apellidoPaterno}
+                            </p>
+                            <p className="text-xs text-gray-400 truncate">{app.user?.email}</p>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            {/* Badge — app.status: pending | accepted | rejected */}
+                            <span className={`badge text-[11px] ${
+                              app.status === 'accepted' ? 'bg-green-50 text-green-700' :
+                              app.status === 'rejected' ? 'bg-red-50 text-red-600'    :
+                              'bg-amber-50 text-amber-700'
+                            }`}>
+                              {statusLabel(app.status)}
+                            </span>
+
+                            {/* Botones solo para postulaciones pendientes */}
+                            {app.status === 'pending' && (
+                              <>
+                                <button
+                                  id={`btn-aceptar-${app.id}`}
+                                  onClick={() => handleActualizar(app.id, 'accepted')}
+                                  disabled={updatingApp === app.id}
+                                  title="Aceptar postulación"
+                                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-semibold transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                                >
+                                  {updatingApp === app.id
+                                    ? <Loader2 size={12} className="animate-spin" />
+                                    : <CheckCircle2 size={12} />}
+                                  Aceptar
+                                </button>
+                                <button
+                                  id={`btn-rechazar-${app.id}`}
+                                  onClick={() => handleActualizar(app.id, 'rejected')}
+                                  disabled={updatingApp === app.id}
+                                  title="Rechazar postulación"
+                                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-red-500 hover:bg-red-600 text-white text-xs font-semibold transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                                >
+                                  {updatingApp === app.id
+                                    ? <Loader2 size={12} className="animate-spin" />
+                                    : <XCircle size={12} />}
+                                  Rechazar
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </div>
-                        <span className={`badge text-[11px] ${
-                          app.estado === 'Aceptada'  ? 'bg-green-50 text-green-700' :
-                          app.estado === 'Rechazada' ? 'bg-red-50 text-red-600'    :
-                          'bg-amber-50 text-amber-700'
-                        }`}>
-                          {app.estado}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -325,7 +404,7 @@ export default function PropertyDetail() {
                 <div className="mb-5">
                   <div className="flex items-end gap-2 mb-1">
                     <span className="text-3xl font-extrabold text-[#1B2A4A]">
-                      S/ {Number(property.precio).toLocaleString('es-PE')}
+                      S/ {Number(property.price).toLocaleString('es-PE')}
                     </span>
                     <span className="text-gray-400 text-sm mb-1">/mes</span>
                   </div>
@@ -335,12 +414,12 @@ export default function PropertyDetail() {
                 {/* Resumen financiero */}
                 <div className="space-y-2.5 text-sm mb-5 bg-gray-50 rounded-xl p-4">
                   <div className="flex justify-between text-gray-600">
-                    <span>Garantía ({property.mesesGarantia} meses)</span>
+                    <span>Garantía ({property.guarantee} meses)</span>
                     <span className="font-semibold text-[#1B2A4A]">S/ {garantiaTotal.toLocaleString('es-PE')}</span>
                   </div>
                   <div className="flex justify-between text-gray-600">
                     <span>Mes de adelanto</span>
-                    <span className="font-semibold text-[#1B2A4A]">S/ {Number(property.precio).toLocaleString('es-PE')}</span>
+                    <span className="font-semibold text-[#1B2A4A]">S/ {Number(property.price).toLocaleString('es-PE')}</span>
                   </div>
                   <div className="border-t border-gray-200 pt-2.5 flex justify-between font-bold text-[#1B2A4A]">
                     <span>Total inicial</span>
@@ -350,8 +429,8 @@ export default function PropertyDetail() {
 
                 {/* Arrendador */}
                 <div className="flex items-center gap-3 py-4 border-t border-b border-gray-100 mb-5">
-                  {property.arrendador?.fotoUrl ? (
-                    <img src={property.arrendador.fotoUrl} alt="" className="w-11 h-11 rounded-full object-cover" />
+                  {property.owner?.fotoUrl ? (
+                    <img src={property.owner.fotoUrl} alt="" className="w-11 h-11 rounded-full object-cover" />
                   ) : (
                     <div className="w-11 h-11 rounded-full bg-[#1B2A4A]/10 flex items-center justify-center text-[#1B2A4A] font-bold text-sm">
                       {arrendadorNombre.split(' ').map(n => n[0]).join('').slice(0, 2)}
@@ -388,12 +467,12 @@ export default function PropertyDetail() {
                     {puedePostular ? (
                       <button
                         onClick={handlePostular}
-                        disabled={applying || property.estado !== 'Disponible'}
+                        disabled={applying || property.status !== 'Disponible'}
                         className="w-full btn-primary flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
                       >
                         {applying
                           ? <><Loader2 size={15} className="animate-spin" /> Enviando…</>
-                          : property.estado !== 'Disponible'
+                          : property.status !== 'Disponible'
                             ? 'Inmueble no disponible'
                             : 'Postular a este inmueble'}
                       </button>

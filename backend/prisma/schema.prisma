@@ -130,6 +130,7 @@ model Property {
   mesesGarantia Int            @default(2)
   tipo          PropertyTipo
   estado        PropertyEstado @default(Disponible)
+  titleDocument String?
   createdAt     DateTime       @default(now())
 
   arrendador   User            @relation(fields: [arrendadorId], references: [id])
