@@ -10,6 +10,7 @@ import Navbar from '../components/Navbar'
 import api from '../services/api'
 import { useAuthStore } from '../store/authStore'
 import { useRegisterStore } from '../store/registerStore'
+import { cargarModelos, compararRostros } from '../services/faceApi'
 
 // ─── Pasos del wizard ─────────────────────────────────────────────────────────
 
@@ -635,12 +636,44 @@ function Step3({ store, onNext, onBack }) {
   const [verifying,    setVerifying]    = useState(false)
   const [verified,     setVerified]     = useState(false)
   const [error,        setError]        = useState('')
+  const [ocrResult, setOcrResult] = useState(null)     // { dniLeido, coincide }
+  const [simFacial, setSimFacial] = useState(null)     // number | null
+  const [aviso, setAviso] = useState('')               // mensaje advisory
+
+  useEffect(() => { cargarModelos().catch(() => {}) }, [])
 
   const handleVerify = async () => {
+    if (!dniFront || !selfie) {
+      setError('Sube la foto de tu DNI y una selfie antes de verificar.')
+      return
+    }
     setVerifying(true)
     setError('')
+    setAviso('')
     try {
-      await api.post('/kyc/face')   // Simulado en MVP
+      // 1. Facial en el navegador (advisory)
+      const { similitud, dniTieneRostro, selfieTieneRostro } =
+        await compararRostros(dniFront, selfie)
+      setSimFacial(similitud)
+
+      // 2. Enviar al backend (OCR fuente de verdad + persistencia)
+      const formData = new FormData()
+      formData.append('dniFoto', dniFront)
+      formData.append('selfie', selfie)
+      if (similitud != null) formData.append('rostroSimilitud', String(similitud))
+      const res = await api.post('/kyc/face', formData, { timeout: 60000 })
+      const data = res.data.data
+      setOcrResult(data.ocr)
+
+      // 3. Advisory: avisar si algo no cuadró, pero NO bloquear
+      if (!dniTieneRostro || !selfieTieneRostro) {
+        setAviso('No detectamos un rostro claro en una de las fotos. Puedes continuar; un asesor lo revisará.')
+      } else if (similitud != null && similitud < 60) {
+        setAviso(`Coincidencia facial baja (${similitud}%). Puedes continuar; un asesor lo revisará.`)
+      } else if (data.ocr?.coincide === false) {
+        setAviso('El DNI de la foto no coincide con el registrado. Puedes continuar; un asesor lo revisará.')
+      }
+
       setVerified(true)
       setField('identidadValidada', true)
     } catch (err) {
@@ -742,9 +775,9 @@ function Step3({ store, onNext, onBack }) {
           </div>
           <div className="grid grid-cols-3 gap-2 text-xs">
             {[
-              ['DNI', 'Validado ✓'],
-              ['Selfie', 'Coincide ✓'],
-              ['Estado', 'Aprobado ✓'],
+              ['DNI', ocrResult?.dniLeido ? `${ocrResult.dniLeido} ${ocrResult.coincide ? '✓' : '⚠'}` : 'No legible'],
+              ['Rostro', simFacial != null ? `${simFacial}% ${simFacial >= 60 ? '✓' : '⚠'}` : 'Sin rostro'],
+              ['Estado', 'Registrado ✓'],
             ].map(([k, v]) => (
               <div key={k} className="bg-white rounded-lg p-2 text-center">
                 <p className="text-gray-400 text-[10px]">{k}</p>
@@ -752,6 +785,13 @@ function Step3({ store, onNext, onBack }) {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {aviso && (
+        <div className="mb-4 p-3 rounded-xl bg-amber-50 border border-amber-200 flex items-start gap-2">
+          <AlertCircle size={13} className="text-amber-500 flex-shrink-0 mt-0.5" />
+          <p className="text-xs text-amber-700">{aviso}</p>
         </div>
       )}
 
@@ -806,6 +846,11 @@ function ScoreRing({ score }) {
       </div>
     </div>
   )
+}
+
+// Color del texto según el mismo umbral que el anillo (ScoreRing): verde ≥80, ámbar ≥60, rojo <60
+function scoreTextColor(score) {
+  return score >= 80 ? 'text-green-400' : score >= 60 ? 'text-amber-400' : 'text-red-400'
 }
 
 function Step4({ store, onFinish }) {
@@ -917,7 +962,7 @@ function Step4({ store, onFinish }) {
           <div className="bg-gradient-to-br from-[#1B2A4A] to-[#243656] rounded-2xl p-6 text-white mb-5">
             <p className="text-white/60 text-xs font-semibold uppercase tracking-wide text-center mb-4">Tu puntaje crediticio</p>
             <ScoreRing score={result.detalle?.puntajeTotal ?? 0} />
-            <p className={`text-center mt-4 text-lg font-extrabold ${result.decision === 'Aprobado' ? 'text-green-400' : 'text-red-400'}`}>
+            <p className={`text-center mt-4 text-lg font-extrabold ${scoreTextColor(result.detalle?.puntajeTotal ?? 0)}`}>
               {result.decision === 'Aprobado' ? '✔ Aprobado' : '✘ Rechazado'}
             </p>
           </div>

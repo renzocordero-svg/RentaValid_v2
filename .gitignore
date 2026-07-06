@@ -24,4 +24,6 @@ Thumbs.db
 backend/prisma/*.db
 
 .claude/
+.claude
 .agents/
+.superpowers/

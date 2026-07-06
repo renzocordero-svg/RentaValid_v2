@@ -72,6 +72,8 @@ model User {
   passwordHash      String
   fotoUrl           String?
   identidadValidada Boolean  @default(false)
+  ocrDniCoincide    Boolean?
+  rostroSimilitud   Float?
   createdAt         DateTime @default(now())
 
   roles            UserRole[]

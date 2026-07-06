@@ -510,6 +510,7 @@ export default function Scoring() {
   const [showBars,  setShowBars]  = useState(false)
   const [inputErr,  setInputErr]  = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [checking,  setChecking]  = useState(true)   // consultando si ya hay score previo
 
   // Guardar resultado devuelto por la API antes de iniciar la animación
   const [pendingScoring, setPendingScoring] = useState(null)
@@ -519,11 +520,22 @@ export default function Scoring() {
     if (!isAuthenticated()) navigate('/registro?redirect=/scoring')
   }, [])
 
-  // Cargar scoring existente al entrar
+  // Cargar scoring existente al entrar: si ya tiene score, mostrar el resultado
+  // directamente (sin la animación de carga). Puede recalcular con otro ingreso.
   useEffect(() => {
-    if (!isAuthenticated()) return
-    // Si ya tiene score previo, pre-cargar para que pueda verlo o recalcular
-    // (no redirigir al resultado automáticamente — el usuario puede querer cambiar el ingreso)
+    if (!isAuthenticated()) { setChecking(false); return }
+    let cancelled = false
+    scoringService.obtenerMio()
+      .then(data => {
+        if (cancelled || !data) return
+        setScoring(data)
+        setAnimScore(data.detalle?.puntajeTotal ?? 0)
+        setShowBars(true)
+        setPhase('result')
+      })
+      .catch(() => { /* 404 = aún no tiene score; se queda en la pantalla de input */ })
+      .finally(() => { if (!cancelled) setChecking(false) })
+    return () => { cancelled = true }
   }, [])
 
   // Ticker del loading
@@ -590,6 +602,13 @@ export default function Scoring() {
 
       <div className="pt-20 pb-16 px-4">
         <div className="pt-6">
+          {checking ? (
+            <div className="flex flex-col items-center justify-center gap-3 py-24 text-gray-400">
+              <Loader2 size={28} className="animate-spin text-[#1B2A4A]" />
+              <p className="text-sm">Cargando tu scoring…</p>
+            </div>
+          ) : (
+            <>
           {phase === 'input'   && <InputScreen   onSubmit={handleSubmit} loading={submitting} error={inputErr} />}
           {phase === 'loading' && <LoadingScreen  elapsed={elapsed} />}
           {phase === 'result'  && scoring && (
@@ -599,6 +618,8 @@ export default function Scoring() {
               showBars={showBars}
               onRecalcular={handleRecalcular}
             />
+          )}
+            </>
           )}
         </div>
       </div>
