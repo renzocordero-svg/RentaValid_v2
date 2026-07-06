@@ -17,7 +17,7 @@ const DISTRITOS = [
   'La Molina', 'San Borja', 'Jesús María', 'Lince', 'Pueblo Libre',
   'Magdalena del Mar', 'San Miguel', 'Surquillo', 'Chorrillos', 'Otro',
 ]
-const TIPOS = ['Departamento', 'Casa', 'Studio', 'Oficina']
+const TIPOS    = ['Departamento', 'Casa', 'Studio', 'Oficina']
 const MAX_FOTOS = 10
 const MAX_MB    = 5
 
@@ -152,12 +152,13 @@ function PhotoUploader({ files, setFiles }) {
 
 // ─── NewProperty page ─────────────────────────────────────────────────────────
 
+// Estado inicial con nombres de campo en inglés (spec)
 const EMPTY = {
-  titulo: '', descripcion: '', tipo: '',
-  distrito: '', direccion: '',
-  area: '', habitaciones: '', banos: '',
-  precio: '', mesesGarantia: '2',
-  cochera: false, amoblado: false,
+  title: '', description: '', type: '',
+  district: '', address: '',
+  area: '', bedrooms: '', bathrooms: '',
+  price: '', guarantee: '2',
+  hasGarage: false, isFurnished: false,
 }
 
 export default function NewProperty() {
@@ -181,22 +182,22 @@ export default function NewProperty() {
     setErrors(e => ({ ...e, [key]: undefined }))
   }
 
-  // Validación
+  // Validación — usa claves en inglés
   const validate = () => {
     const e = {}
-    if (!form.titulo.trim())       e.titulo       = 'El título es requerido'
-    if (!form.descripcion.trim())  e.descripcion  = 'La descripción es requerida'
-    if (!form.tipo)                e.tipo         = 'Selecciona un tipo'
-    if (!form.distrito)            e.distrito     = 'Selecciona un distrito'
-    if (!form.direccion.trim())    e.direccion    = 'La dirección es requerida'
+    if (!form.title.trim())       e.title       = 'El título es requerido'
+    if (!form.description.trim()) e.description = 'La descripción es requerida'
+    if (!form.type)               e.type        = 'Selecciona un tipo'
+    if (!form.district)           e.district    = 'Selecciona un distrito'
+    if (!form.address.trim())     e.address     = 'La dirección es requerida'
     if (!form.area || isNaN(form.area) || Number(form.area) <= 0)
       e.area = 'Ingresa el área en m²'
-    if (!form.habitaciones || isNaN(form.habitaciones) || Number(form.habitaciones) < 1)
-      e.habitaciones = 'Al menos 1 habitación'
-    if (!form.banos || isNaN(form.banos) || Number(form.banos) < 1)
-      e.banos = 'Al menos 1 baño'
-    if (!form.precio || isNaN(form.precio) || Number(form.precio) <= 0)
-      e.precio = 'Ingresa el precio mensual'
+    if (!form.bedrooms || isNaN(form.bedrooms) || Number(form.bedrooms) < 1)
+      e.bedrooms = 'Al menos 1 habitación'
+    if (!form.bathrooms || isNaN(form.bathrooms) || Number(form.bathrooms) < 1)
+      e.bathrooms = 'Al menos 1 baño'
+    if (!form.price || isNaN(form.price) || Number(form.price) <= 0)
+      e.price = 'Ingresa el precio mensual'
     if (files.length === 0)
       e.fotos = 'Agrega al menos 1 foto'
     return e
@@ -210,23 +211,23 @@ export default function NewProperty() {
     setStep('uploading')
     setServerMsg('')
     try {
-      // 1. Crear el inmueble
+      // 1. Crear el inmueble con campos en inglés (spec)
       const property = await propertiesService.crear({
-        titulo:        form.titulo.trim(),
-        descripcion:   form.descripcion.trim(),
-        tipo:          form.tipo,
-        distrito:      form.distrito,
-        direccion:     form.direccion.trim(),
-        area:          Number(form.area),
-        habitaciones:  Number(form.habitaciones),
-        banos:         Number(form.banos),
-        precio:        Number(form.precio),
-        mesesGarantia: Number(form.mesesGarantia),
-        cochera:       form.cochera,
-        amoblado:      form.amoblado,
+        title:       form.title.trim(),
+        description: form.description.trim(),
+        type:        form.type,
+        district:    form.district,
+        address:     form.address.trim(),
+        area:        Number(form.area),
+        bedrooms:    Number(form.bedrooms),
+        bathrooms:   Number(form.bathrooms),
+        price:       Number(form.price),
+        guarantee:   Number(form.guarantee),
+        hasGarage:   form.hasGarage,
+        isFurnished: form.isFurnished,
       })
 
-      // 2. Subir fotos a Cloudinary
+      // 2. Subir fotos a Cloudinary vía backend
       await propertiesService.subirFotos(property.id, files)
 
       setStep('done')
@@ -314,11 +315,11 @@ export default function NewProperty() {
                   <input
                     className="input-field"
                     placeholder="Ej: Departamento moderno con vista al parque"
-                    value={form.titulo}
-                    onChange={e => set('titulo', e.target.value)}
+                    value={form.title}
+                    onChange={e => set('title', e.target.value)}
                     maxLength={120}
                   />
-                  <FieldError msg={errors.titulo} />
+                  <FieldError msg={errors.title} />
                 </div>
 
                 <div>
@@ -327,10 +328,10 @@ export default function NewProperty() {
                     rows={4}
                     className="input-field resize-none"
                     placeholder="Describe el inmueble: ubicación, comodidades, accesos, puntos de interés cercanos…"
-                    value={form.descripcion}
-                    onChange={e => set('descripcion', e.target.value)}
+                    value={form.description}
+                    onChange={e => set('description', e.target.value)}
                   />
-                  <FieldError msg={errors.descripcion} />
+                  <FieldError msg={errors.description} />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -339,15 +340,15 @@ export default function NewProperty() {
                     <div className="relative">
                       <select
                         className="input-field appearance-none pr-8"
-                        value={form.tipo}
-                        onChange={e => set('tipo', e.target.value)}
+                        value={form.type}
+                        onChange={e => set('type', e.target.value)}
                       >
                         <option value="">Seleccionar…</option>
                         {TIPOS.map(t => <option key={t}>{t}</option>)}
                       </select>
                       <Home size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                     </div>
-                    <FieldError msg={errors.tipo} />
+                    <FieldError msg={errors.type} />
                   </div>
 
                   <div>
@@ -355,15 +356,15 @@ export default function NewProperty() {
                     <div className="relative">
                       <select
                         className="input-field appearance-none pr-8"
-                        value={form.distrito}
-                        onChange={e => set('distrito', e.target.value)}
+                        value={form.district}
+                        onChange={e => set('district', e.target.value)}
                       >
                         <option value="">Seleccionar…</option>
                         {DISTRITOS.map(d => <option key={d}>{d}</option>)}
                       </select>
                       <MapPin size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                     </div>
-                    <FieldError msg={errors.distrito} />
+                    <FieldError msg={errors.district} />
                   </div>
                 </div>
 
@@ -372,10 +373,10 @@ export default function NewProperty() {
                   <input
                     className="input-field"
                     placeholder="Ej: Av. Larco 820, Piso 8"
-                    value={form.direccion}
-                    onChange={e => set('direccion', e.target.value)}
+                    value={form.address}
+                    onChange={e => set('address', e.target.value)}
                   />
-                  <FieldError msg={errors.direccion} />
+                  <FieldError msg={errors.address} />
                 </div>
               </div>
             </div>
@@ -407,12 +408,12 @@ export default function NewProperty() {
                       type="number" min="1" max="20"
                       className="input-field pr-10"
                       placeholder="Ej: 2"
-                      value={form.habitaciones}
-                      onChange={e => set('habitaciones', e.target.value)}
+                      value={form.bedrooms}
+                      onChange={e => set('bedrooms', e.target.value)}
                     />
                     <BedDouble size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                   </div>
-                  <FieldError msg={errors.habitaciones} />
+                  <FieldError msg={errors.bedrooms} />
                 </div>
 
                 <div>
@@ -422,20 +423,20 @@ export default function NewProperty() {
                       type="number" min="1" max="10"
                       className="input-field pr-10"
                       placeholder="Ej: 2"
-                      value={form.banos}
-                      onChange={e => set('banos', e.target.value)}
+                      value={form.bathrooms}
+                      onChange={e => set('bathrooms', e.target.value)}
                     />
                     <Bath size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                   </div>
-                  <FieldError msg={errors.banos} />
+                  <FieldError msg={errors.bathrooms} />
                 </div>
               </div>
 
               {/* Checkboxes */}
               <div className="flex gap-4 mt-4">
                 {[
-                  { key: 'cochera',  icon: Car,  label: 'Incluye cochera' },
-                  { key: 'amoblado', icon: Sofa, label: 'Totalmente amoblado' },
+                  { key: 'hasGarage',   icon: Car,  label: 'Incluye cochera' },
+                  { key: 'isFurnished', icon: Sofa, label: 'Totalmente amoblado' },
                 ].map(({ key, icon: Icon, label }) => (
                   <label key={key} className={`flex items-center gap-2.5 flex-1 p-3 rounded-xl cursor-pointer border-2 transition-all ${form[key] ? 'border-[#1B2A4A] bg-[#1B2A4A]/5' : 'border-gray-200 hover:border-gray-300'}`}>
                     <div
@@ -464,11 +465,11 @@ export default function NewProperty() {
                       type="number" min="1"
                       className="input-field pl-9"
                       placeholder="Ej: 1800"
-                      value={form.precio}
-                      onChange={e => set('precio', e.target.value)}
+                      value={form.price}
+                      onChange={e => set('price', e.target.value)}
                     />
                   </div>
-                  <FieldError msg={errors.precio} />
+                  <FieldError msg={errors.price} />
                 </div>
 
                 <div>
@@ -477,8 +478,8 @@ export default function NewProperty() {
                     {['1', '2', '3'].map(m => (
                       <button
                         key={m} type="button"
-                        onClick={() => set('mesesGarantia', m)}
-                        className={`flex-1 py-3 rounded-xl text-sm font-semibold transition-all border-2 ${form.mesesGarantia === m ? 'border-[#1B2A4A] bg-[#1B2A4A] text-white' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}
+                        onClick={() => set('guarantee', m)}
+                        className={`flex-1 py-3 rounded-xl text-sm font-semibold transition-all border-2 ${form.guarantee === m ? 'border-[#1B2A4A] bg-[#1B2A4A] text-white' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}
                       >
                         {m} {m === '1' ? 'mes' : 'meses'}
                       </button>
@@ -487,17 +488,17 @@ export default function NewProperty() {
                 </div>
               </div>
 
-              {form.precio && (
+              {form.price && (
                 <div className="mt-4 p-3 rounded-xl bg-[#1B2A4A]/5 flex items-center gap-2 text-sm">
                   <Info size={14} className="text-[#1B2A4A] flex-shrink-0" />
                   <span className="text-gray-600">
                     Garantía estimada:{' '}
                     <strong className="text-[#1B2A4A]">
-                      S/ {(Number(form.precio) * Number(form.mesesGarantia)).toLocaleString('es-PE')}
+                      S/ {(Number(form.price) * Number(form.guarantee)).toLocaleString('es-PE')}
                     </strong>
                     {' '}· Total inicial:{' '}
                     <strong className="text-[#1B2A4A]">
-                      S/ {(Number(form.precio) * (Number(form.mesesGarantia) + 1)).toLocaleString('es-PE')}
+                      S/ {(Number(form.price) * (Number(form.guarantee) + 1)).toLocaleString('es-PE')}
                     </strong>
                   </span>
                 </div>

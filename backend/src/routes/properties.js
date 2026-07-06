@@ -1,6 +1,6 @@
 const express = require('express')
 const {
-  listar, obtenerPorId, crear, postular, subirFotos,
+  listar, obtenerPorId, crear, apply, postular, subirFotos,
 } = require('../controllers/properties.controller')
 const { authRequired, roleRequired } = require('../middleware/auth')
 const { handleUpload } = require('../middleware/upload')
@@ -20,15 +20,22 @@ router.post('/',
   crear
 )
 
+// POST /properties/:id/apply    — Postular (spec oficial, solo Arrendatario)
+router.post('/:id/apply',
+  authRequired,
+  roleRequired('Arrendatario'),
+  apply
+)
+
 // POST /properties/:id/fotos    — Sube fotos a Cloudinary (solo Arrendador dueño)
 router.post('/:id/fotos',
   authRequired,
   roleRequired('Arrendador'),
-  handleUpload,          // multer: parsea multipart y valida tipo/tamaño
-  subirFotos             // sube a Cloudinary y guarda en PropertyPhoto
+  handleUpload,
+  subirFotos
 )
 
-// POST /properties/:id/postular — Postula al inmueble (solo Arrendatario)
+// POST /properties/:id/postular — Backward compat → delega a /apply
 router.post('/:id/postular',
   authRequired,
   roleRequired('Arrendatario'),
