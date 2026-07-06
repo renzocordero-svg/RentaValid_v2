@@ -115,11 +115,7 @@ Devuelve ÚNICAMENTE el siguiente JSON (sin markdown, sin comentarios):
 
 // ── Bloque Gemini (activo) ────────────────────────────────────────────────────
 
-async function generarContrato(datos) {
-  if (!process.env.GEMINI_API_KEY) {
-    throw new Error('GEMINI_API_KEY no está configurada en las variables de entorno')
-  }
-
+async function generarConGemini(datos) {
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
   const model = genAI.getGenerativeModel({
     model: 'gemini-1.5-flash',
@@ -149,4 +145,83 @@ async function generarContrato(datos) {
   return parsed   // { contenido: string, clausulas: Clausula[] }
 }
 
-module.exports = { generarContrato }
+// ── Generador local (modo demo / sin GEMINI_API_KEY) ──────────────────────────
+/**
+ * Construye un contrato de arrendamiento completo con las 13 cláusulas exigidas,
+ * incluida la NOVENA (Allanamiento a futuro — Ley N° 30933), sin llamar a ninguna
+ * IA externa. Devuelve la misma forma { contenido, clausulas } que Gemini.
+ */
+function generarContratoSimulado(datos) {
+  const {
+    arrendador, arrendatario,
+    direccion, distrito, tipoInmueble,
+    monto, garantia, mesesGarantia,
+    fechaInicioStr, fechaFinStr,
+  } = datos
+
+  const S = (n) => Number(n).toLocaleString('es-PE')
+  const A  = arrendador.nombreCompleto
+  const Ad = arrendatario.nombreCompleto
+  const dniA  = arrendador.dni   || 'no registrado'
+  const dniAd = arrendatario.dni || 'no registrado'
+
+  const clausulas = [
+    { numero: 1, titulo: 'PRIMERA — Identificación de las Partes',
+      texto: `Celebran el presente contrato, de una parte EL ARRENDADOR, ${A}, identificado con DNI N° ${dniA}; y de la otra parte EL ARRENDATARIO, ${Ad}, identificado con DNI N° ${dniAd}. Ambas partes declaran obrar con plena capacidad legal.` },
+    { numero: 2, titulo: 'SEGUNDA — Objeto del Contrato',
+      texto: `EL ARRENDADOR cede en arrendamiento a EL ARRENDATARIO el inmueble tipo ${tipoInmueble} ubicado en ${direccion}, distrito de ${distrito}, provincia y departamento de Lima, Perú, destinado exclusivamente a uso de casa-habitación.` },
+    { numero: 3, titulo: 'TERCERA — Plazo del Arrendamiento',
+      texto: `El plazo de arrendamiento es de doce (12) meses, iniciando el ${fechaInicioStr} y culminando el ${fechaFinStr}, fecha en que EL ARRENDATARIO deberá restituir el bien, salvo renovación expresa y escrita.` },
+    { numero: 4, titulo: 'CUARTA — Renta Mensual y Forma de Pago',
+      texto: `La renta mensual asciende a S/ ${S(monto)} (soles), pagadera por adelantado dentro de los primeros cinco (5) días de cada mes, a través de la plataforma RentaValid. La comisión de intermediación del 5% se aplica conforme a los términos del servicio.` },
+    { numero: 5, titulo: 'QUINTA — Depósito en Garantía',
+      texto: `EL ARRENDATARIO entrega en calidad de garantía la suma de S/ ${S(garantia)} (soles), equivalente a ${mesesGarantia} mensualidad(es), que será devuelta al término del contrato previa verificación del buen estado del inmueble y la inexistencia de deudas pendientes.` },
+    { numero: 6, titulo: 'SEXTA — Obligaciones del Arrendador',
+      texto: `EL ARRENDADOR se obliga a entregar el bien en buen estado de conservación, a mantener a EL ARRENDATARIO en el uso pacífico del inmueble y a efectuar las reparaciones necesarias no imputables al arrendatario, conforme a los artículos 1678° a 1680° del Código Civil.` },
+    { numero: 7, titulo: 'SÉPTIMA — Obligaciones del Arrendatario',
+      texto: `EL ARRENDATARIO se obliga a pagar puntualmente la renta, a usar el bien con la diligencia debida según su destino, a no subarrendar sin autorización escrita y a devolver el inmueble en el estado en que lo recibió, salvo el desgaste normal, conforme a los artículos 1681° a 1683° del Código Civil.` },
+    { numero: 8, titulo: 'OCTAVA — Uso del Bien y Prohibiciones',
+      texto: `Queda prohibido destinar el inmueble a fines distintos de vivienda, realizar modificaciones estructurales sin consentimiento escrito, así como cualquier actividad ilícita o que perturbe la tranquilidad de los vecinos.` },
+    { numero: 9, titulo: 'NOVENA — ALLANAMIENTO A FUTURO', ley: 'N° 30933',
+      texto: `De conformidad con el artículo 7° de la Ley N° 30933 — Ley que regula el procedimiento especial de desalojo con intervención notarial —, EL ARRENDATARIO declara de manera expresa e irrevocable su ALLANAMIENTO ANTICIPADO a la desocupación y entrega del inmueble en los siguientes supuestos: (i) vencimiento del plazo del contrato; (ii) resolución del contrato por incumplimiento; y (iii) falta de pago de dos (2) o más cuotas consecutivas de la renta. Las partes acuerdan inscribir el presente contrato en el Registro Administrativo de Arrendamiento para Vivienda (RAV). El procedimiento de desalojo se iniciará ante Notario Público, sin necesidad de proceso judicial, en aplicación de la citada ley.` },
+    { numero: 10, titulo: 'DÉCIMA — Causales de Resolución Anticipada',
+      texto: `Son causales de resolución de pleno derecho: el incumplimiento en el pago de la renta, el uso indebido del bien, el subarrendamiento no autorizado y el incumplimiento de cualquier obligación esencial pactada, operando la resolución conforme al artículo 1697° del Código Civil.` },
+    { numero: 11, titulo: 'UNDÉCIMA — Notificaciones y Domicilio',
+      texto: `Las partes señalan como domicilio el indicado en la cláusula primera y, para efectos de notificaciones electrónicas, los correos registrados en la plataforma RentaValid: ${arrendador.email || 'correo del arrendador'} y ${arrendatario.email || 'correo del arrendatario'}.` },
+    { numero: 12, titulo: 'DUODÉCIMA — Jurisdicción y Ley Aplicable',
+      texto: `El presente contrato se rige por las leyes de la República del Perú. Para cualquier controversia, las partes se someten a la competencia de los jueces y tribunales del distrito judicial de Lima, renunciando a cualquier otro fuero.` },
+    { numero: 13, titulo: 'DÉCIMO TERCERA — Firmas y Formalización Notarial',
+      texto: `En señal de conformidad, las partes suscriben el presente contrato de manera digital a través de la plataforma RentaValid, con firma electrónica validada mediante DNI y código de verificación, generándose un sello de tiempo y un hash de integridad, todo con pleno valor legal.` },
+  ]
+
+  const contenido = [
+    'CONTRATO DE ARRENDAMIENTO DE VIVIENDA',
+    'Al amparo del Código Civil peruano (Arts. 1666° a 1712°) y de la Ley N° 30933',
+    '',
+    `Entre ${A} (EL ARRENDADOR) y ${Ad} (EL ARRENDATARIO), respecto del inmueble ubicado en ${direccion}, ${distrito}, Lima, Perú, por una renta mensual de S/ ${S(monto)} y con vigencia del ${fechaInicioStr} al ${fechaFinStr}.`,
+    '',
+    ...clausulas.map(c => `${c.titulo}\n${c.texto}`),
+  ].join('\n')
+
+  return { contenido, clausulas }
+}
+
+/**
+ * Punto de entrada. Usa Gemini si hay GEMINI_API_KEY; si no está configurada
+ * o la API falla, cae a un generador local determinístico (modo demo/simulado)
+ * para que el flujo de contrato funcione sin depender de servicios externos.
+ */
+async function generarContrato(datos) {
+  if (process.env.GEMINI_API_KEY) {
+    try {
+      return await generarConGemini(datos)
+    } catch (err) {
+      console.warn('[Contratos] Gemini no disponible →', err.message, '— usando generador local (simulado)')
+    }
+  } else {
+    console.warn('[Contratos] GEMINI_API_KEY no configurada — usando generador local (simulado)')
+  }
+  return generarContratoSimulado(datos)
+}
+
+module.exports = { generarContrato, generarContratoSimulado }

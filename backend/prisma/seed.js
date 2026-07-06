@@ -1,8 +1,19 @@
 require('dotenv').config()
 const { PrismaClient } = require('@prisma/client')
 const bcrypt = require('bcryptjs')
+const crypto = require('crypto')
+const { generarContratoSimulado } = require('../src/services/gemini')
 
 const prisma = new PrismaClient()
+
+// YYYY-MM del mes actual desplazado `offset` meses (offset negativo = pasado)
+function periodoOffset(offset) {
+  const d = new Date()
+  d.setDate(1)
+  d.setMonth(d.getMonth() + offset)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+function sha256(txt) { return crypto.createHash('sha256').update(txt).digest('hex') }
 
 // ── Datos de prueba ───────────────────────────────────────────────────────────
 
@@ -103,6 +114,22 @@ const PROPIEDADES = [
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main() {
+  // ── Guardia de seguridad ────────────────────────────────────────────────────
+  // Este seed es DESTRUCTIVO (borra toda la base) y trae datos de demostración.
+  // Solo debe correrse contra una base LOCAL, NUNCA contra la real/producción
+  // (Supabase compartida, etc.), aunque NODE_ENV sea development.
+  const dbUrl = process.env.DATABASE_URL || ''
+  const hostLocal = /@(localhost|127\.0\.0\.1)[:/]/.test(dbUrl)
+  const esProd    = process.env.NODE_ENV === 'production'
+  if ((esProd || !hostLocal) && process.env.SEED_FORCE !== 'true') {
+    console.error('\n⛔ Seed bloqueado: la base de datos no es local.')
+    console.error(`   NODE_ENV=${process.env.NODE_ENV || 'undefined'} · DATABASE_URL apunta a un host no-local.`)
+    console.error('   Este seed BORRA toda la base y carga datos de demo — se evita para no')
+    console.error('   destruir data real. Si de verdad quieres ejecutarlo, usa:')
+    console.error('     SEED_FORCE=true npm run db:seed\n')
+    process.exit(1)
+  }
+
   console.log('🌱 Iniciando seed…\n')
 
   // Limpia datos previos en orden de dependencias (para re-seeds)
@@ -178,6 +205,7 @@ async function main() {
 
   // ── Propiedades ────────────────────────────────────────────────────────────
   console.log('🏠 Creando inmuebles…')
+  const createdProps = []
   for (const { fotos, tipo, ...data } of PROPIEDADES) {
     const property = await prisma.property.create({
       data: {
@@ -187,8 +215,79 @@ async function main() {
         fotos: { create: fotos },
       },
     })
+    createdProps.push(property)
     console.log(`   ✅ [${property.id}] ${property.titulo} — ${property.distrito} · S/ ${property.precio}/mes`)
   }
+
+  // ── Contrato firmado + pagos de ejemplo (para que la demo tenga datos) ──────
+  // Diego (arrendatario) ya alquiló el 1er inmueble de Carlos: postulación
+  // aceptada → contrato firmado por ambas partes → historial de pagos.
+  console.log('\n📄 Creando contrato de demostración + pagos…')
+  const propDemo = createdProps[0]
+
+  // Marcar el inmueble como Arrendado (ya tiene contrato activo)
+  await prisma.property.update({ where: { id: propDemo.id }, data: { estado: 'Arrendado' } })
+
+  const application = await prisma.application.create({
+    data: { propertyId: propDemo.id, arrendatarioId: arrendatario.id, estado: 'Aceptada' },
+  })
+
+  const nombreCompleto = (u) => [u.nombre, u.apellidoPaterno, u.apellidoMaterno].filter(Boolean).join(' ')
+  const monto    = propDemo.precio
+  const garantia = propDemo.precio * propDemo.mesesGarantia
+  const fechaInicio = new Date(); fechaInicio.setMonth(fechaInicio.getMonth() - 3); fechaInicio.setDate(1); fechaInicio.setHours(0, 0, 0, 0)
+  const fechaFin    = new Date(fechaInicio); fechaFin.setFullYear(fechaFin.getFullYear() + 1)
+  const fmt = (d) => d.toLocaleDateString('es-PE', { day: '2-digit', month: 'long', year: 'numeric' })
+
+  const { contenido, clausulas } = generarContratoSimulado({
+    arrendador:    { ...arrendador,   nombreCompleto: nombreCompleto(arrendador) },
+    arrendatario:  { ...arrendatario, nombreCompleto: nombreCompleto(arrendatario) },
+    direccion:     propDemo.direccion,
+    distrito:      propDemo.distrito,
+    tipoInmueble:  propDemo.tipo,
+    monto, garantia, mesesGarantia: propDemo.mesesGarantia,
+    fechaInicioStr: fmt(fechaInicio), fechaFinStr: fmt(fechaFin),
+  })
+
+  const firmadoAt = new Date(fechaInicio)
+  const contract = await prisma.contract.create({
+    data: {
+      applicationId: application.id,
+      contenido, clausulas, monto, garantia, fechaInicio, fechaFin,
+      estado:    'Firmado',
+      hashFirma: sha256(`${application.id}|${firmadoAt.toISOString()}`),
+      firmadoAt,
+      signatures: {
+        create: [
+          { userId: arrendador.id,   tipo: 'Arrendador',   ip: '190.0.0.10', hash: sha256(`${contenido}|arrendador|${firmadoAt.toISOString()}`) },
+          { userId: arrendatario.id, tipo: 'Arrendatario', ip: '190.0.0.20', hash: sha256(`${contenido}|arrendatario|${firmadoAt.toISOString()}`) },
+        ],
+      },
+    },
+  })
+
+  // Pagos: 3 meses pagados y el mes actual pendiente
+  const comision = Math.round(monto * 0.05 * 100) / 100
+  const pagosDemo = [
+    { periodo: periodoOffset(-3), estado: 'Pagado',    diaPago: 3 },
+    { periodo: periodoOffset(-2), estado: 'Pagado',    diaPago: 4 },
+    { periodo: periodoOffset(-1), estado: 'Pagado',    diaPago: 2 },
+    { periodo: periodoOffset(0),  estado: 'Pendiente', diaPago: null },
+  ]
+  for (const p of pagosDemo) {
+    const [y, m] = p.periodo.split('-').map(Number)
+    await prisma.payment.create({
+      data: {
+        contractId: contract.id,
+        periodo:    p.periodo,
+        monto, comision,
+        estado:     p.estado,
+        fechaPago:  p.diaPago ? new Date(y, m - 1, p.diaPago) : null,
+      },
+    })
+  }
+  console.log(`   ✅ Contrato #${contract.id} (Firmado) · ${propDemo.titulo}`)
+  console.log(`   ✅ ${pagosDemo.length} pagos (3 pagados + 1 pendiente) · comisión 5% = S/ ${comision}`)
 
   console.log('\n🎉 Seed completado exitosamente.')
   console.log('─'.repeat(52))

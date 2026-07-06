@@ -180,7 +180,9 @@ function Step1({ store, onNext }) {
       useAuthStore.getState().login(token, user)
 
       // 2. Enviar código de verificación (usa el token recién obtenido)
-      await api.post('/kyc/send-code', { email })
+      const codeRes = await api.post('/kyc/send-code', { email })
+      // Modo simulado (sin Gmail): el backend devuelve el código para mostrarlo
+      if (codeRes.data.data?.simulado) setField('simulatedCode', codeRes.data.data.code)
 
       onNext()
     } catch (err) {
@@ -413,7 +415,7 @@ function Step1({ store, onNext }) {
 // ─── PASO 2: Verificación de email ────────────────────────────────────────────
 
 function Step2({ store, onNext, onBack }) {
-  const { email, setField } = store
+  const { email, simulatedCode, setField } = store
   const [digits, setDigits] = useState(['', '', '', '', '', ''])
   const [errs, setErrs]     = useState('')
   const [loading, setLoading] = useState(false)
@@ -467,7 +469,8 @@ function Step2({ store, onNext, onBack }) {
   const handleResend = async () => {
     setResending(true)
     try {
-      await api.post('/kyc/send-code', { email })
+      const codeRes = await api.post('/kyc/send-code', { email })
+      if (codeRes.data.data?.simulado) setField('simulatedCode', codeRes.data.data.code)
       setResent(true)
       setCountdown(60)
       setDigits(['', '', '', '', '', ''])
@@ -488,6 +491,17 @@ function Step2({ store, onNext, onBack }) {
           <span className="font-semibold text-[#1B2A4A]">{email}</span>
         </p>
       </div>
+
+      {/* Aviso modo demo: código simulado (sin envío real de correo) */}
+      {simulatedCode && (
+        <div className="mb-5 bg-[#C9A84C]/10 border border-[#C9A84C]/40 rounded-xl p-3.5 text-center">
+          <p className="text-[11px] font-semibold text-[#1B2A4A]/70 uppercase tracking-wide">
+            Modo demo · correo simulado
+          </p>
+          <p className="text-xs text-gray-500 mt-1">Tu código de verificación es:</p>
+          <p className="text-2xl font-extrabold tracking-[0.4em] text-[#1B2A4A] mt-1">{simulatedCode}</p>
+        </div>
+      )}
 
       {/* Cajitas de 6 dígitos */}
       <div className="flex justify-center gap-3 mb-6" onPaste={handlePaste}>

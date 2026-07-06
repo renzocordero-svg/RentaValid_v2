@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react'
-import { Link } from 'react-router-dom'
+import { useState, useMemo, useEffect } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import {
   User, Mail, Phone, MapPin, Lock, Eye, EyeOff, Shield,
   Award, CheckCircle, Edit3, Save, Home, Calendar, DollarSign,
@@ -10,6 +10,8 @@ import {
 import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
 import { currentUser } from '../data/mockData'
+import { useAuthStore } from '../store/authStore'
+import { scoringService } from '../services/scoring'
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -96,15 +98,15 @@ function Toggle({ enabled, onToggle }) {
 
 // ─── TAB: Mis datos ───────────────────────────────────────────────────────────
 
-function MisDatos() {
+function MisDatos({ perfil }) {
   const [editing, setEditing]   = useState(false)
   const [saved, setSaved]       = useState(false)
   const [form, setForm]         = useState({
-    firstName: currentUser.firstName,
-    lastName:  currentUser.lastName,
-    email:     currentUser.email,
-    phone:     currentUser.phone,
-    district:  currentUser.district,
+    firstName: perfil.firstName,
+    lastName:  perfil.lastName,
+    email:     perfil.email,
+    phone:     perfil.phone,
+    district:  perfil.district,
   })
   const [notifs, setNotifs] = useState({
     email: true,
@@ -147,11 +149,13 @@ function MisDatos() {
             <div className="flex flex-col items-center gap-3 flex-shrink-0">
               <div className="relative">
                 <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-navy to-navy/70 flex items-center justify-center text-gold font-extrabold text-2xl select-none">
-                  {currentUser.firstName[0]}{currentUser.lastName[0]}
+                  {(perfil.firstName[0] || '')}{(perfil.lastName[0] || '')}
                 </div>
-                <div className="absolute -bottom-1.5 -right-1.5 w-7 h-7 rounded-full bg-green-500 border-2 border-white flex items-center justify-center shadow-sm">
-                  <Check size={13} className="text-white" />
-                </div>
+                {perfil.verified && (
+                  <div className="absolute -bottom-1.5 -right-1.5 w-7 h-7 rounded-full bg-green-500 border-2 border-white flex items-center justify-center shadow-sm">
+                    <Check size={13} className="text-white" />
+                  </div>
+                )}
               </div>
               {editing && (
                 <button className="text-xs text-navy font-semibold border border-navy/20 px-3 py-1.5 rounded-lg hover:bg-navy/5 transition">
@@ -159,8 +163,8 @@ function MisDatos() {
                 </button>
               )}
               <div className="text-center">
-                <p className="text-xs font-semibold text-gray-700">{currentUser.firstName} {currentUser.lastName}</p>
-                <p className="text-[10px] text-gray-400">Inquilino verificado</p>
+                <p className="text-xs font-semibold text-gray-700">{perfil.firstName} {perfil.lastName}</p>
+                <p className="text-[10px] text-gray-400">{perfil.roleLabel}{perfil.verified ? ' verificado' : ''}</p>
               </div>
             </div>
 
@@ -226,15 +230,17 @@ function MisDatos() {
             </div>
             <div className="flex-1">
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">DNI</p>
-              <p className="text-xl font-extrabold text-navy tracking-widest mt-0.5">{currentUser.dni}</p>
+              <p className="text-xl font-extrabold text-navy tracking-widest mt-0.5">{perfil.dni || '—'}</p>
             </div>
             <div className="flex flex-col items-end gap-1.5">
-              <span className="badge bg-green-50 text-green-700 border border-green-200">
-                <CheckCircle size={10} /> RENIEC Verificado
+              <span className={`badge border ${perfil.verified ? 'bg-green-50 text-green-700 border-green-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+                <CheckCircle size={10} /> {perfil.verified ? 'RENIEC Verificado' : 'Sin verificar'}
               </span>
-              <span className="badge bg-blue-50 text-blue-600 border border-blue-200">
-                <Award size={10} /> Score {currentUser.scoringScore}/100
-              </span>
+              {perfil.scoringScore != null && (
+                <span className="badge bg-blue-50 text-blue-600 border border-blue-200">
+                  <Award size={10} /> Score {perfil.scoringScore}/100
+                </span>
+              )}
             </div>
           </div>
           <p className="text-xs text-gray-400 mt-3 flex items-center gap-1.5">
@@ -795,17 +801,46 @@ const NAV_ITEMS = [
   { id: 'pagos',      label: 'Historial de pagos',   icon: ReceiptText, desc: 'Movimientos' },
 ]
 
-const STATS = [
-  { label: 'Score crediticio', value: `${currentUser.scoringScore}/100`,       sub: 'Perfil Aprobado',      icon: Award,      color: 'text-gold bg-gold/15'       },
-  { label: 'Alquileres',       value: `${currentUser.activeRentals.length}`,   sub: '1 activo · 1 finaliz.',icon: Home,       color: 'text-navy bg-white/15'      },
-  { label: 'Total pagado',     value: 'S/ 9,600',                              sub: 'Solo en alquileres',   icon: TrendingUp, color: 'text-white/80 bg-white/10'  },
-  { label: 'Miembro desde',    value: 'Ene 2026',                              sub: '5 meses',              icon: Calendar,   color: 'text-white/80 bg-white/10'  },
-]
-
 export default function Profile() {
   const [tab, setTab] = useState('datos')
+  const { user, logout } = useAuthStore()
+  const navigate = useNavigate()
+  const [score, setScore] = useState(null)
 
-  const initials = `${currentUser.firstName[0]}${currentUser.lastName[0]}`
+  const doLogout = () => { logout(); navigate('/') }
+
+  useEffect(() => {
+    // El scoring solo existe para arrendatarios; si no hay, se ignora
+    scoringService.obtenerMio().then(setScore).catch(() => setScore(null))
+  }, [])
+
+  // ── Perfil real (con respaldo al mock si algún campo falta) ────────────────
+  const esArrendador = (user?.roles ?? []).includes('Arrendador')
+  const perfil = {
+    firstName:    user?.nombre ?? currentUser.firstName,
+    lastName:     [user?.apellidoPaterno, user?.apellidoMaterno].filter(Boolean).join(' ') || currentUser.lastName,
+    email:        user?.email ?? currentUser.email,
+    phone:        user?.telefono ?? currentUser.phone,
+    district:     currentUser.district,   // no forma parte del modelo de usuario
+    dni:          user?.dni ?? currentUser.dni,
+    verified:     user?.identidadValidada ?? false,
+    scoringScore: score?.detalle?.puntajeTotal ?? null,
+    roleLabel:    esArrendador ? 'Arrendador' : 'Inquilino',
+  }
+
+  const fullName = [perfil.firstName, perfil.lastName].filter(Boolean).join(' ')
+  const initials = `${perfil.firstName?.[0] ?? ''}${perfil.lastName?.[0] ?? ''}`.toUpperCase()
+
+  const memberSince = user?.createdAt
+    ? new Date(user.createdAt).toLocaleDateString('es-PE', { month: 'short', year: 'numeric' })
+    : '—'
+
+  const STATS = [
+    { label: 'Score crediticio', value: perfil.scoringScore != null ? `${perfil.scoringScore}/100` : '—', sub: score?.decision ?? 'Sin calcular', icon: Award,      color: 'text-gold bg-gold/15'      },
+    { label: 'Rol',              value: perfil.roleLabel,                     sub: perfil.verified ? 'Verificado' : 'Sin verificar', icon: User,       color: 'text-navy bg-white/15'     },
+    { label: 'Tope de alquiler', value: score?.topeAlquiler != null ? `S/ ${Number(score.topeAlquiler).toLocaleString('es-PE')}` : '—', sub: 'Según tu ingreso', icon: TrendingUp, color: 'text-white/80 bg-white/10' },
+    { label: 'Miembro desde',    value: memberSince,                          sub: '',                     icon: Calendar,   color: 'text-white/80 bg-white/10' },
+  ]
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -834,16 +869,22 @@ export default function Profile() {
 
               {/* Info */}
               <div className="flex-1 min-w-0">
-                <h1 className="text-white font-extrabold text-xl leading-tight">{currentUser.name}</h1>
-                <p className="text-white/50 text-sm mt-0.5">{currentUser.email} · {currentUser.phone}</p>
+                <h1 className="text-white font-extrabold text-xl leading-tight">{fullName || 'Usuario'}</h1>
+                <p className="text-white/50 text-sm mt-0.5">{perfil.email}{perfil.phone ? ` · ${perfil.phone}` : ''}</p>
                 <div className="flex flex-wrap items-center gap-2 mt-2.5">
-                  <span className="badge bg-green-400/20 text-green-300 border border-green-400/30 text-[10px]">
-                    <Shield size={9} /> RENIEC Verificado
-                  </span>
-                  <span className="badge bg-gold/20 text-gold border border-gold/25 text-[10px]">
-                    <Award size={9} /> Score {currentUser.scoringScore}/100
-                  </span>
-                  <span className="badge bg-white/10 text-white/50 text-[10px]">Inquilino</span>
+                  {perfil.verified
+                    ? <span className="badge bg-green-400/20 text-green-300 border border-green-400/30 text-[10px]">
+                        <Shield size={9} /> RENIEC Verificado
+                      </span>
+                    : <span className="badge bg-amber-400/20 text-amber-200 border border-amber-400/30 text-[10px]">
+                        <AlertCircle size={9} /> Identidad sin verificar
+                      </span>}
+                  {perfil.scoringScore != null && (
+                    <span className="badge bg-gold/20 text-gold border border-gold/25 text-[10px]">
+                      <Award size={9} /> Score {perfil.scoringScore}/100
+                    </span>
+                  )}
+                  <span className="badge bg-white/10 text-white/50 text-[10px]">{perfil.roleLabel}</span>
                 </div>
               </div>
 
@@ -904,7 +945,7 @@ export default function Profile() {
                 ))}
               </nav>
 
-              <button className="w-full bg-white rounded-2xl shadow-card border border-gray-100 p-3 flex items-center gap-3 text-red-400 hover:text-red-600 hover:bg-red-50 transition text-sm font-semibold">
+              <button onClick={doLogout} className="w-full bg-white rounded-2xl shadow-card border border-gray-100 p-3 flex items-center gap-3 text-red-400 hover:text-red-600 hover:bg-red-50 transition text-sm font-semibold">
                 <LogOut size={16} /> Cerrar sesión
               </button>
             </div>
@@ -929,7 +970,7 @@ export default function Profile() {
 
           {/* ── Tab content ── */}
           <main className="flex-1 min-w-0 lg:min-h-[60vh]">
-            {tab === 'datos'      && <MisDatos />}
+            {tab === 'datos'      && <MisDatos perfil={perfil} />}
             {tab === 'seguridad'  && <Seguridad />}
             {tab === 'alquileres' && <MisAlquileres />}
             {tab === 'pagos'      && <HistorialPagos />}

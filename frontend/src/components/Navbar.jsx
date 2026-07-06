@@ -196,7 +196,7 @@ export default function Navbar({ transparent = false }) {
                 </button>
 
                 <Link
-                  to="/registro"
+                  to="/login"
                   className="hidden sm:block text-white/70 hover:text-white text-sm font-medium transition-colors px-2"
                 >
                   Iniciar sesión
@@ -253,7 +253,7 @@ export default function Navbar({ transparent = false }) {
               ))}
               <div className="border-t border-white/10 mt-3 pt-3 grid grid-cols-2 gap-2">
                 <Link
-                  to="/registro"
+                  to="/login"
                   onClick={() => setMobileOpen(false)}
                   className="text-white/70 text-center font-medium py-2.5 px-3 rounded-xl border border-white/20 hover:bg-white/8 transition text-sm"
                 >
