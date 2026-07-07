@@ -12,6 +12,7 @@ import Footer from '../components/Footer'
 import { currentUser } from '../data/mockData'
 import { useAuthStore } from '../store/authStore'
 import { scoringService } from '../services/scoring'
+import { paymentsService } from '../services/payments'
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -24,8 +25,56 @@ function fmtDate(iso) {
 function getRentalProgress(startDate, endDate) {
   const start = new Date(startDate).getTime()
   const end   = new Date(endDate).getTime()
-  const now   = new Date('2026-06-23').getTime()
+  const now   = Date.now()
   return Math.min(100, Math.max(0, Math.round(((now - start) / (end - start)) * 100)))
+}
+
+// Deriva "mis alquileres" (un contrato = un alquiler) a partir de los pagos reales.
+function buildRentalsFromPayments(payments) {
+  const byContract = new Map()
+  for (const p of payments) {
+    const c = p.contract
+    if (!c || byContract.has(c.id)) continue
+    const property = c.application?.property
+    byContract.set(c.id, {
+      id:          c.id,
+      contractId:  c.id,
+      property:    property?.titulo   ?? `Contrato #${c.id}`,
+      address:     property?.distrito ?? '—',
+      image:       property?.fotos?.[0]?.url ?? 'https://picsum.photos/seed/rv-rental/600/400',
+      price:       c.monto,
+      startDate:   c.fechaInicio,
+      endDate:     c.fechaFin,
+      status:      c.estado === 'Finalizado' ? 'Finalizado' : 'Activo',
+      contractNum: `RV-${String(c.id).padStart(6, '0')}`,
+    })
+  }
+  return [...byContract.values()]
+}
+
+// Mapea los pagos reales (backend, español) al formato de fila usado en la tabla.
+function buildPaymentRows(payments) {
+  return payments.map((p) => {
+    const esGarantia = p.periodo === 'garantia-devolucion'
+    const status = esGarantia && p.estadoEfectivo === 'Pagado' ? 'Devuelto' : p.estadoEfectivo
+    let concept = 'Devolución de garantía'
+    let date    = p.fechaPago ?? p.createdAt
+    if (!esGarantia) {
+      const [y, m] = p.periodo.split('-').map(Number)
+      const mesLabel = new Date(y, m - 1, 1).toLocaleDateString('es-PE', { month: 'long' })
+      concept = `Alquiler ${mesLabel.charAt(0).toUpperCase() + mesLabel.slice(1)} ${y}`
+      date = p.fechaPago ?? `${p.periodo}-05`
+    }
+    return {
+      id:       p.id,
+      date,
+      concept,
+      amount:   p.monto,
+      status,
+      type:     esGarantia ? 'refund' : 'rent',
+      property: p.contract?.application?.property?.titulo ?? '—',
+    }
+  })
 }
 
 function getPasswordStrength(pw) {
@@ -67,6 +116,7 @@ function StatusBadge({ status, type }) {
   const STYLES = {
     Pagado:    'bg-green-50 text-green-700 border border-green-200',
     Pendiente: 'bg-amber-50 text-amber-700 border border-amber-200',
+    Atrasado:  'bg-red-50 text-red-700 border border-red-200',
     Devuelto:  'bg-blue-50 text-blue-700 border border-blue-200',
     Activo:    'bg-green-50 text-green-700 border border-green-200',
     Finalizado:'bg-gray-100 text-gray-500 border border-gray-200',
@@ -74,6 +124,7 @@ function StatusBadge({ status, type }) {
   const ICONS = {
     Pagado: <Check size={9} />,
     Pendiente: <Clock size={9} />,
+    Atrasado: <AlertCircle size={9} />,
     Devuelto: <RefreshCw size={9} />,
     Activo: <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />,
     Finalizado: <X size={9} />,
@@ -486,11 +537,26 @@ function Seguridad() {
 
 // ─── TAB: Mis alquileres ──────────────────────────────────────────────────────
 
-function MisAlquileres() {
-  const rentals  = currentUser.activeRentals
+function MisAlquileres({ payments, loading, score }) {
+  const rentals  = useMemo(() => buildRentalsFromPayments(payments), [payments])
   const active   = rentals.filter(r => r.status === 'Activo').length
   const finished = rentals.filter(r => r.status === 'Finalizado').length
   const totalRent = rentals.reduce((s, r) => s + r.price, 0)
+
+  if (loading) return (
+    <div className="py-16 text-center text-gray-400 text-sm">Cargando tus alquileres…</div>
+  )
+
+  if (rentals.length === 0) return (
+    <div className="bg-navy/4 rounded-2xl border border-navy/10 p-8 text-center">
+      <Home size={28} className="text-navy/40 mx-auto mb-3" />
+      <p className="text-sm font-bold text-navy">Aún no tienes alquileres</p>
+      <p className="text-xs text-gray-500 mt-1 mb-4">Cuando postules y firmes un contrato, aparecerá aquí.</p>
+      <Link to="/inmuebles" className="btn-primary text-xs inline-flex items-center gap-1.5">
+        <Home size={13} /> Ver inmuebles
+      </Link>
+    </div>
+  )
 
   return (
     <div className="space-y-4">
@@ -578,7 +644,7 @@ function MisAlquileres() {
               {/* Actions */}
               <div className="flex gap-2">
                 <Link
-                  to={`/contrato/${rental.propertyId}`}
+                  to={`/contrato/${rental.contractId}`}
                   className="flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold py-2.5 rounded-xl border border-navy/20 text-navy hover:bg-navy/5 transition"
                 >
                   <FileText size={13} /> Ver contrato
@@ -599,7 +665,9 @@ function MisAlquileres() {
       <div className="bg-navy/4 rounded-2xl border border-navy/10 p-5 flex items-center justify-between">
         <div>
           <p className="text-sm font-bold text-navy">¿Buscas un nuevo inmueble?</p>
-          <p className="text-xs text-gray-500 mt-0.5">Tu perfil está aprobado · Score 87/100</p>
+          <p className="text-xs text-gray-500 mt-0.5">
+            {score?.detalle?.puntajeTotal != null ? `Tu perfil está aprobado · Score ${score.detalle.puntajeTotal}/100` : 'Explora inmuebles disponibles'}
+          </p>
         </div>
         <Link to="/inmuebles" className="btn-primary text-xs flex items-center gap-1.5">
           <Home size={13} /> Ver inmuebles
@@ -617,17 +685,21 @@ const TYPE_COLORS = {
   refund:  { bg: 'bg-blue-50',   icon: 'text-blue-600',    label: 'Devolución'},
 }
 
-function HistorialPagos() {
+function HistorialPagos({ payments: rawPayments, loading }) {
   const [filter, setFilter] = useState('todos')
-  const payments = currentUser.paymentHistory
+  const payments = useMemo(() => buildPaymentRows(rawPayments), [rawPayments])
 
   const paidRent   = payments.filter(p => p.type === 'rent' && p.status === 'Pagado').reduce((s, p) => s + p.amount, 0)
-  const pending    = payments.filter(p => p.status === 'Pendiente')
+  const pending    = payments.filter(p => p.status === 'Pendiente' || p.status === 'Atrasado')
   const nextPayment = pending[0]
 
   const shown = filter === 'todos'
     ? payments
     : payments.filter(p => p.status.toLowerCase() === filter)
+
+  if (loading) return (
+    <div className="py-16 text-center text-gray-400 text-sm">Cargando tu historial de pagos…</div>
+  )
 
   return (
     <div className="space-y-4">
@@ -797,7 +869,7 @@ function HistorialPagos() {
 const NAV_ITEMS = [
   { id: 'datos',      label: 'Mis datos',           icon: User,        desc: 'Información personal' },
   { id: 'seguridad',  label: 'Seguridad',            icon: Lock,        desc: 'Contraseña y acceso' },
-  { id: 'alquileres', label: 'Mis alquileres',       icon: Home,        desc: '2 contratos' },
+  { id: 'alquileres', label: 'Mis alquileres',       icon: Home,        desc: 'Contratos y avance' },
   { id: 'pagos',      label: 'Historial de pagos',   icon: ReceiptText, desc: 'Movimientos' },
 ]
 
@@ -806,12 +878,18 @@ export default function Profile() {
   const { user, logout } = useAuthStore()
   const navigate = useNavigate()
   const [score, setScore] = useState(null)
+  const [payments, setPayments] = useState([])
+  const [paymentsLoading, setPaymentsLoading] = useState(true)
 
   const doLogout = () => { logout(); navigate('/') }
 
   useEffect(() => {
     // El scoring solo existe para arrendatarios; si no hay, se ignora
     scoringService.obtenerMio().then(setScore).catch(() => setScore(null))
+    paymentsService.listar()
+      .then(setPayments)
+      .catch(() => setPayments([]))
+      .finally(() => setPaymentsLoading(false))
   }, [])
 
   // ── Perfil real (con respaldo al mock si algún campo falta) ────────────────
@@ -972,8 +1050,8 @@ export default function Profile() {
           <main className="flex-1 min-w-0 lg:min-h-[60vh]">
             {tab === 'datos'      && <MisDatos perfil={perfil} />}
             {tab === 'seguridad'  && <Seguridad />}
-            {tab === 'alquileres' && <MisAlquileres />}
-            {tab === 'pagos'      && <HistorialPagos />}
+            {tab === 'alquileres' && <MisAlquileres payments={payments} loading={paymentsLoading} score={score} />}
+            {tab === 'pagos'      && <HistorialPagos payments={payments} loading={paymentsLoading} />}
           </main>
         </div>
       </div>

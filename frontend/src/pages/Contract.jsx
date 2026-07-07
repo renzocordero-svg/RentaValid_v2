@@ -1,10 +1,10 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
-  Shield, Check, ChevronRight, Download, Fingerprint, AlertCircle,
-  MapPin, Calendar, DollarSign, X, Clock, ArrowRight, Hash,
-  Lock, FileText, CheckCircle2, Loader2, Edit3, Save, RotateCcw,
-  Building2, User, BadgeCheck, Printer, ChevronDown, ChevronUp,
+  Shield, Check, ChevronRight, Download, AlertCircle,
+  MapPin, Calendar, DollarSign, X, Clock, ArrowRight,
+  FileText, CheckCircle2, Loader2, Edit3, Save, RotateCcw,
+  BadgeCheck, Printer, ChevronDown, ChevronUp,
   PenLine, Info, Sparkles,
 } from 'lucide-react'
 import Navbar from '../components/Navbar'
@@ -14,227 +14,6 @@ import { useAuthStore } from '../store/authStore'
 
 const N = (v) => Number(v).toLocaleString('es-PE')
 const fmtDate = (d) => new Date(d).toLocaleDateString('es-PE', { day: 'numeric', month: 'long', year: 'numeric' })
-
-// ─── Sensor de huella (modal de firma) ───────────────────────────────────────
-
-function FingerprintSensor({ onDone }) {
-  const [state, setState] = useState('idle')
-  const ref = useRef()
-
-  const handleTouch = () => {
-    if (state !== 'idle') return
-    setState('reading')
-    ref.current = setTimeout(() => {
-      setState('verifying')
-      ref.current = setTimeout(() => { setState('done'); setTimeout(onDone, 600) }, 1500)
-    }, 1800)
-  }
-  useEffect(() => () => clearTimeout(ref.current), [])
-
-  const ring  = { idle: 'border-gray-200',   reading: 'border-[#C9A84C]', verifying: 'border-blue-400', done: 'border-green-400' }
-  const bg    = { idle: 'bg-gray-50',         reading: 'bg-[#C9A84C]/10', verifying: 'bg-blue-50',      done: 'bg-green-50'      }
-  const icon  = { idle: 'text-gray-300',      reading: 'text-[#C9A84C]',  verifying: 'text-blue-400',   done: 'text-green-500'   }
-  const label = { idle: 'Toca el sensor',     reading: 'Leyendo huella…', verifying: 'Verificando…',    done: '¡Confirmado!'     }
-
-  return (
-    <div className="flex flex-col items-center gap-4">
-      <div className="relative">
-        {(state === 'reading' || state === 'verifying') && (
-          <div className={`absolute inset-0 rounded-full border-2 animate-ping ${state === 'reading' ? 'border-[#C9A84C]/50' : 'border-blue-300/50'}`} />
-        )}
-        <button
-          onClick={handleTouch}
-          disabled={state !== 'idle'}
-          className={`w-28 h-28 rounded-full border-4 flex items-center justify-center transition-all duration-500 ${ring[state]} ${bg[state]}`}
-        >
-          {state === 'done'
-            ? <Check size={44} className="text-green-500" />
-            : <Fingerprint size={48} className={`${icon[state]} transition-colors duration-500`} />}
-        </button>
-      </div>
-      <p className={`text-sm font-semibold ${state === 'done' ? 'text-green-600' : state === 'idle' ? 'text-gray-400' : 'text-[#1B2A4A]'}`}>
-        {label[state]}
-      </p>
-    </div>
-  )
-}
-
-// ─── Modal de firma digital ───────────────────────────────────────────────────
-
-function SignModal({ contract, user, onClose, onSigned }) {
-  const [step, setStep]         = useState(0)   // 0: confirm | 1: biometric | 2: signing
-  const [accepted, setAccepted] = useState(false)
-  const [progress, setProgress] = useState(0)
-  const [apiError, setApiError] = useState('')
-
-  const nombreCompleto = [user.nombre, user.apellidoPaterno, user.apellidoMaterno].filter(Boolean).join(' ')
-
-  const doSign = useCallback(async () => {
-    const start = Date.now()
-    const dur   = 2200
-    const raf   = (ts) => {
-      const pct = Math.min((ts - start) / dur, 1)
-      setProgress(Math.round(pct * 100))
-      if (pct < 1) requestAnimationFrame(raf)
-    }
-    requestAnimationFrame(raf)
-
-    try {
-      const result = await contractsService.firmar(contract.id)
-      setTimeout(() => onSigned(result), dur)
-    } catch (err) {
-      setApiError(err.response?.data?.error || 'Error al firmar. Intenta de nuevo.')
-      setStep(0)
-    }
-  }, [contract.id, onSigned])
-
-  useEffect(() => { if (step === 2) doSign() }, [step, doSign])
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-[#1B2A4A]/60 backdrop-blur-md" onClick={step === 0 ? onClose : undefined} />
-      <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden">
-
-        {/* Header */}
-        <div className="bg-[#1B2A4A] px-6 py-5 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-[#C9A84C]/20 flex items-center justify-center">
-              <Lock size={17} className="text-[#C9A84C]" />
-            </div>
-            <div>
-              <p className="text-white font-bold text-sm">Firma digital</p>
-              <p className="text-white/50 text-xs">
-                {step === 0 && 'Confirmar datos'}{step === 1 && 'Verificación biométrica'}{step === 2 && 'Aplicando firma…'}
-              </p>
-            </div>
-          </div>
-          {step === 0 && (
-            <button onClick={onClose} className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition">
-              <X size={14} className="text-white" />
-            </button>
-          )}
-        </div>
-
-        {/* Step pills */}
-        <div className="flex items-center px-6 py-3 border-b border-gray-100 gap-2">
-          {['Datos', 'Huella', 'Firmando'].map((label, i) => (
-            <div key={i} className="flex items-center gap-2 flex-1">
-              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 transition-all ${
-                step > i ? 'bg-green-500 text-white' : step === i ? 'bg-[#1B2A4A] text-white' : 'bg-gray-100 text-gray-400'
-              }`}>
-                {step > i ? <Check size={10} /> : i + 1}
-              </div>
-              <span className={`text-xs font-medium flex-1 ${step === i ? 'text-[#1B2A4A]' : step > i ? 'text-green-600' : 'text-gray-400'}`}>{label}</span>
-              {i < 2 && <div className={`h-px flex-1 ${step > i ? 'bg-green-200' : 'bg-gray-100'}`} />}
-            </div>
-          ))}
-        </div>
-
-        <div className="p-6">
-          {apiError && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2">
-              <AlertCircle size={14} className="text-red-500" />
-              <p className="text-xs text-red-600">{apiError}</p>
-            </div>
-          )}
-
-          {/* Step 0 — confirmar datos */}
-          {step === 0 && (
-            <div className="space-y-4">
-              <div className="bg-gray-50 rounded-2xl p-4 space-y-2.5">
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-3">Datos del firmante</p>
-                {[
-                  { icon: User,      label: 'Nombre',   value: nombreCompleto                    },
-                  { icon: Hash,      label: 'DNI',      value: user.dni || 'No registrado'        },
-                  { icon: FileText,  label: 'Inmueble', value: contract.application?.property?.titulo || `Contrato #${contract.id}` },
-                  { icon: DollarSign,label: 'Renta',    value: `S/ ${N(contract.monto)}/mes`     },
-                ].map(({ icon: Icon, label, value }) => (
-                  <div key={label} className="flex items-center justify-between">
-                    <span className="flex items-center gap-2 text-xs text-gray-500">
-                      <Icon size={12} className="text-gray-400" /> {label}
-                    </span>
-                    <span className="text-xs font-semibold text-[#1B2A4A] text-right max-w-[55%] truncate">{value}</span>
-                  </div>
-                ))}
-              </div>
-
-              <label className="flex items-start gap-3 cursor-pointer p-3 rounded-xl hover:bg-gray-50 transition-colors">
-                <div
-                  onClick={() => setAccepted(v => !v)}
-                  className={`w-5 h-5 rounded flex-shrink-0 mt-0.5 border-2 flex items-center justify-center transition-all cursor-pointer ${accepted ? 'bg-[#1B2A4A] border-[#1B2A4A]' : 'border-gray-300'}`}
-                >
-                  {accepted && <Check size={11} className="text-white" />}
-                </div>
-                <p className="text-xs text-gray-600 leading-relaxed">
-                  He leído y acepto íntegramente los términos del contrato, incluyendo la <strong className="text-[#1B2A4A]">Cláusula de Allanamiento a Futuro — Ley N° 30933</strong>. Entiendo que la firma digital tiene plena validez legal y mérito ejecutivo.
-                </p>
-              </label>
-
-              <button
-                onClick={() => setStep(1)}
-                disabled={!accepted}
-                className="w-full btn-primary flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Continuar a verificación biométrica <ArrowRight size={15} />
-              </button>
-            </div>
-          )}
-
-          {/* Step 1 — huella */}
-          {step === 1 && (
-            <div className="py-4 flex flex-col items-center gap-5">
-              <div className="text-center">
-                <p className="text-[#1B2A4A] font-bold mb-1">Coloca tu dedo en el sensor</p>
-                <p className="text-gray-400 text-xs">Tu huella confirma tu identidad para la firma</p>
-              </div>
-              <FingerprintSensor onDone={() => setStep(2)} />
-              <div className="flex items-center gap-2 bg-blue-50 rounded-xl p-3 w-full">
-                <Shield size={13} className="text-blue-500 flex-shrink-0" />
-                <p className="text-xs text-blue-600">Tu huella se verifica localmente y nunca se almacena.</p>
-              </div>
-            </div>
-          )}
-
-          {/* Step 2 — firmando */}
-          {step === 2 && (
-            <div className="py-8 flex flex-col items-center gap-5">
-              <div className="relative w-24 h-24">
-                <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
-                  <circle cx="50" cy="50" r="42" fill="none" stroke="#e5e7eb" strokeWidth="6" />
-                  <circle cx="50" cy="50" r="42" fill="none" stroke="#1B2A4A" strokeWidth="6"
-                    strokeLinecap="round"
-                    strokeDasharray={`${(progress / 100) * 263.9} 263.9`}
-                    className="transition-all duration-100" />
-                </svg>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-lg font-extrabold text-[#1B2A4A]">{progress}%</span>
-                </div>
-              </div>
-              <div className="text-center">
-                <p className="font-bold text-[#1B2A4A]">Aplicando firma digital</p>
-                <p className="text-xs text-gray-400 mt-1">Generando hash SHA-256 y registrando la firma…</p>
-              </div>
-              <div className="w-full space-y-2">
-                {[
-                  { label: 'Verificando identidad',       done: progress >= 30  },
-                  { label: 'Aplicando firma electrónica', done: progress >= 65  },
-                  { label: 'Registrando en la plataforma',done: progress >= 100 },
-                ].map(({ label, done }) => (
-                  <div key={label} className="flex items-center gap-3 text-xs">
-                    <div className={`w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 transition-all ${done ? 'bg-green-500' : 'bg-gray-100'}`}>
-                      {done ? <Check size={9} className="text-white" /> : <div className="w-1.5 h-1.5 rounded-full bg-gray-300" />}
-                    </div>
-                    <span className={done ? 'text-green-600 font-medium' : 'text-gray-400'}>{label}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
 
 // ─── Encabezado del documento ─────────────────────────────────────────────────
 
@@ -596,63 +375,6 @@ function EditPanel({ contract, onSaved, onCancel }) {
   )
 }
 
-// ─── Estado de éxito post-firma ───────────────────────────────────────────────
-
-function SignedSuccess({ contract, result, navigate }) {
-  const ambos = result?.contratoFirmado
-  return (
-    <div className="card p-8 text-center max-w-lg mx-auto">
-      <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-5 ${ambos ? 'bg-green-100' : 'bg-blue-100'}`}>
-        {ambos
-          ? <CheckCircle2 size={40} className="text-green-600" />
-          : <PenLine size={34} className="text-blue-600" />}
-      </div>
-
-      <h2 className="text-xl font-extrabold text-[#1B2A4A] mb-2">
-        {ambos ? '¡Contrato firmado!' : 'Tu firma fue registrada'}
-      </h2>
-      <p className="text-gray-500 text-sm mb-6">
-        {ambos
-          ? 'Ambas partes han firmado. El contrato está activo y tiene plena validez legal bajo la Ley N° 30933.'
-          : 'Tu firma fue registrada exitosamente. El contrato se activará cuando la otra parte también firme.'}
-      </p>
-
-      <div className="bg-gray-50 rounded-2xl p-5 mb-5 text-left space-y-2.5">
-        {[
-          ['Contrato',     `#${contract.id}`],
-          ['Estado',       ambos ? 'Firmado · Activo' : 'Firmado parcialmente'],
-          ['Tu firma',     'Aplicada ✓'],
-          ['Hash SHA-256', result?.signature?.hash?.slice(0, 24) + '…'],
-          ['Fecha',        fmtDate(new Date())],
-        ].map(([k, v]) => (
-          <div key={k} className="flex justify-between gap-2">
-            <span className="text-gray-400 text-xs">{k}</span>
-            <span className="font-semibold text-[#1B2A4A] text-xs text-right">{v}</span>
-          </div>
-        ))}
-      </div>
-
-      {ambos && (
-        <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl p-3 mb-5 text-left">
-          <Shield size={14} className="text-green-600 flex-shrink-0" />
-          <p className="text-xs text-green-700">
-            Este contrato tiene mérito ejecutivo. Ante incumplimiento puede accionarse ante notario público sin proceso judicial (Art. 7° Ley N° 30933).
-          </p>
-        </div>
-      )}
-
-      <div className="flex flex-col sm:flex-row gap-3">
-        <button onClick={() => navigate('/pagos')} className="flex-1 btn-primary flex items-center justify-center gap-2">
-          Ir a mis pagos <ChevronRight size={15} />
-        </button>
-        <button onClick={() => navigate('/inmuebles')} className="flex-1 btn-outline flex items-center justify-center gap-2">
-          Explorar inmuebles
-        </button>
-      </div>
-    </div>
-  )
-}
-
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
 export default function Contract() {
@@ -664,8 +386,6 @@ export default function Contract() {
   const [loading,   setLoading]   = useState(true)
   const [fetchErr,  setFetchErr]  = useState('')
   const [mode,      setMode]      = useState('view')      // view | edit
-  const [showModal, setShowModal] = useState(false)
-  const [signResult, setSignResult] = useState(null)      // null | { signature, contratoFirmado }
 
   useEffect(() => {
     setLoading(true)
@@ -695,16 +415,6 @@ export default function Contract() {
     </div>
   )
 
-  if (signResult) return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <div className="pt-24 pb-16 px-4">
-        <SignedSuccess contract={contract} result={signResult} navigate={navigate} />
-      </div>
-      <Footer />
-    </div>
-  )
-
   // ── Calcular estado de firmas ─────────────────────────────────────────────
   const signatures   = contract?.signatures ?? []
   const yaFirme      = signatures.some(s => s.userId === user?.id)
@@ -721,15 +431,6 @@ export default function Contract() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
-
-      {showModal && (
-        <SignModal
-          contract={contract}
-          user={user}
-          onClose={() => setShowModal(false)}
-          onSigned={(result) => { setShowModal(false); setSignResult(result) }}
-        />
-      )}
 
       {/* Page header */}
       <div className="bg-white border-b border-gray-100 sticky top-0 z-10">

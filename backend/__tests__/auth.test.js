@@ -40,6 +40,7 @@ const mockUser = {
   identidadValidada: false,
   createdAt:         new Date('2026-01-01T00:00:00Z'),
   roles:             [{ role: { nombre: 'Arrendatario' } }],
+  activo:            true,
 }
 
 // Cuerpo válido de registro

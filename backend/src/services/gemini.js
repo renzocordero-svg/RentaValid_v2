@@ -1,7 +1,7 @@
 /**
  * Servicio de generación de contratos mediante IA.
  *
- * Proveedor activo : Google Gemini  (gemini-1.5-flash)
+ * Proveedor activo : Google Gemini  (gemini-2.5-flash)
  * Variable de env  : GEMINI_API_KEY
  *
  * ── ALTERNATIVA: Claude API (Anthropic) ───────────────────────────────────────
@@ -118,11 +118,11 @@ Devuelve ÚNICAMENTE el siguiente JSON (sin markdown, sin comentarios):
 async function generarConGemini(datos) {
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
   const model = genAI.getGenerativeModel({
-    model: 'gemini-1.5-flash',
+    model: 'gemini-2.5-flash',
     generationConfig: {
       responseMimeType: 'application/json',  // fuerza JSON válido en la respuesta
       temperature:      0.3,                 // baja aleatoriedad en texto legal
-      maxOutputTokens:  6000,
+      maxOutputTokens:  24000,
     },
   })
 
