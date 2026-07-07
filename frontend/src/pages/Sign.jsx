@@ -253,6 +253,7 @@ export default function Sign() {
   const [dni,         setDni]        = useState(user?.dni || '')
   const [code,        setCode]       = useState('')
   const [codeSent,    setCodeSent]   = useState(false)
+  const [simCode,     setSimCode]    = useState('')   // código en modo demo (correo simulado)
   const [sendingCode, setSendingCode] = useState(false)
   const [countdown,   setCountdown]  = useState(0)
   const [step1Err,    setStep1Err]   = useState('')
@@ -286,7 +287,8 @@ export default function Sign() {
     setSendingCode(true)
     setStep1Err('')
     try {
-      await api.post('/kyc/send-code', { email: user?.email })
+      const res = await api.post('/kyc/send-code', { email: user?.email })
+      if (res.data.data?.simulado) setSimCode(res.data.data.code)
       setCodeSent(true)
       setCountdown(60)
     } catch (err) {
@@ -556,6 +558,13 @@ export default function Sign() {
                 <p className="text-[10px] text-green-600 mb-3 flex items-center gap-1">
                   <Check size={10} /> Código enviado · válido 10 min
                 </p>
+              )}
+
+              {simCode && (
+                <div className="mb-3 bg-[#C9A84C]/10 border border-[#C9A84C]/40 rounded-xl p-2.5 text-center">
+                  <span className="text-[10px] font-bold text-[#1B2A4A]/70 uppercase tracking-wide">Modo demo · código: </span>
+                  <span className="text-sm font-extrabold tracking-[0.3em] text-[#1B2A4A]">{simCode}</span>
+                </div>
               )}
 
               <OtpInput value={code} onChange={setCode} disabled={!codeSent} />

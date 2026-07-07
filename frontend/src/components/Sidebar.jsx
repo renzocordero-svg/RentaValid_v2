@@ -13,7 +13,7 @@ const SECTIONS = [
     key: 'principal',
     title: 'Principal',
     items: [
-      { icon: LayoutDashboard, label: 'Panel',            href: '/pagos'    },
+      { icon: LayoutDashboard, label: 'Panel',            href: '/dashboard' },
       { icon: Search,          label: 'Buscar inmuebles', href: '/inmuebles' },
     ],
   },

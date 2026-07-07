@@ -1,0 +1,334 @@
+{
+  "info": {
+    "name": "RentaValid API",
+    "_postman_id": "rentavalid-collection-0001",
+    "description": "Colección de la API de RentaValid (MVP). Sigue el flujo de la demo: registro → KYC → scoring → inmuebles → postulación → contrato con IA → firma → pagos.\n\nToda respuesta usa el sobre uniforme:\n- Éxito: { \"data\": <payload> }\n- Error: { \"error\": \"Mensaje en español\" }\n\nVariables de colección:\n- baseUrl: http://localhost:4000\n- token: se guarda automáticamente al hacer login/registro del arrendatario\n- arrendadorToken: se guarda al hacer login del arrendador\n- applicationId / contractId: se guardan automáticamente en los pasos correspondientes.\n\nModo demo: si el backend no tiene claves de Gmail/Gemini/Cloudinary, el correo, el contrato con IA y las fotos se generan en modo SIMULADO. En send-code el código llega en la respuesta (campo data.code).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:4000" },
+    { "key": "token", "value": "" },
+    { "key": "arrendadorToken", "value": "" },
+    { "key": "applicationId", "value": "" },
+    { "key": "contractId", "value": "" },
+    { "key": "verificationCode", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "1. Auth",
+      "item": [
+        {
+          "name": "Login arrendador (seed)",
+          "event": [
+            { "listen": "test", "script": { "exec": [
+              "const d = pm.response.json().data;",
+              "if (d && d.token) pm.collectionVariables.set('arrendadorToken', d.token);",
+              "pm.test('login 200', () => pm.response.code === 200);"
+            ], "type": "text/javascript" } }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"carlos.mendoza@rentavalid.pe\",\n  \"password\": \"Demo1234!\"\n}" },
+            "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] }
+          }
+        },
+        {
+          "name": "Registrar arrendatario",
+          "event": [
+            { "listen": "test", "script": { "exec": [
+              "const d = pm.response.json().data;",
+              "if (d && d.token) pm.collectionVariables.set('token', d.token);",
+              "pm.test('registro 201', () => pm.response.code === 201);"
+            ], "type": "text/javascript" } }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"nombre\": \"Tester\",\n  \"apellidoPaterno\": \"Demo\",\n  \"apellidoMaterno\": \"QA\",\n  \"dni\": \"45678901\",\n  \"email\": \"tester.demo@rentavalid.pe\",\n  \"telefono\": \"+51 900 000 000\",\n  \"password\": \"Demo1234!\",\n  \"rol\": \"Arrendatario\"\n}" },
+            "url": { "raw": "{{baseUrl}}/auth/register", "host": ["{{baseUrl}}"], "path": ["auth", "register"] }
+          }
+        },
+        {
+          "name": "Login arrendatario",
+          "event": [
+            { "listen": "test", "script": { "exec": [
+              "const d = pm.response.json().data;",
+              "if (d && d.token) pm.collectionVariables.set('token', d.token);",
+              "pm.test('login 200', () => pm.response.code === 200);"
+            ], "type": "text/javascript" } }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"diego.salinas@gmail.com\",\n  \"password\": \"Demo1234!\"\n}" },
+            "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] }
+          }
+        },
+        {
+          "name": "Mi perfil (GET /auth/me)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/auth/me", "host": ["{{baseUrl}}"], "path": ["auth", "me"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. KYC",
+      "item": [
+        {
+          "name": "Consultar DNI (público)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"dni\": \"47382910\"\n}" },
+            "url": { "raw": "{{baseUrl}}/kyc/dni", "host": ["{{baseUrl}}"], "path": ["kyc", "dni"] }
+          }
+        },
+        {
+          "name": "Enviar código (SIMULADO devuelve code)",
+          "event": [
+            { "listen": "test", "script": { "exec": [
+              "const d = pm.response.json().data;",
+              "if (d && d.code) pm.collectionVariables.set('verificationCode', d.code);",
+              "pm.test('send-code 200', () => pm.response.code === 200);"
+            ], "type": "text/javascript" } }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"diego.salinas@gmail.com\"\n}" },
+            "url": { "raw": "{{baseUrl}}/kyc/send-code", "host": ["{{baseUrl}}"], "path": ["kyc", "send-code"] }
+          }
+        },
+        {
+          "name": "Verificar email",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"code\": \"{{verificationCode}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/kyc/verify-email", "host": ["{{baseUrl}}"], "path": ["kyc", "verify-email"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Scoring",
+      "item": [
+        {
+          "name": "Calcular scoring",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"ingreso\": 4500\n}" },
+            "url": { "raw": "{{baseUrl}}/scoring", "host": ["{{baseUrl}}"], "path": ["scoring"] }
+          }
+        },
+        {
+          "name": "Mi scoring",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/scoring/me", "host": ["{{baseUrl}}"], "path": ["scoring", "me"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Properties",
+      "item": [
+        {
+          "name": "Listar inmuebles (con filtros)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/properties?district=Miraflores&minPrice=1000&maxPrice=3000&sort=price_asc",
+              "host": ["{{baseUrl}}"], "path": ["properties"],
+              "query": [
+                { "key": "district", "value": "Miraflores" },
+                { "key": "minPrice", "value": "1000" },
+                { "key": "maxPrice", "value": "3000" },
+                { "key": "sort", "value": "price_asc" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Detalle de inmueble",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/properties/1", "host": ["{{baseUrl}}"], "path": ["properties", "1"] }
+          }
+        },
+        {
+          "name": "Crear inmueble (arrendador)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{arrendadorToken}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"Departamento de prueba Postman\",\n  \"description\": \"Inmueble creado desde Postman para pruebas.\",\n  \"type\": \"Departamento\",\n  \"district\": \"Miraflores\",\n  \"address\": \"Av. Demo 123\",\n  \"area\": 70,\n  \"bedrooms\": 2,\n  \"bathrooms\": 2,\n  \"price\": 1900,\n  \"guarantee\": 2,\n  \"hasGarage\": true,\n  \"isFurnished\": false\n}" },
+            "url": { "raw": "{{baseUrl}}/properties", "host": ["{{baseUrl}}"], "path": ["properties"] }
+          }
+        },
+        {
+          "name": "Postular a inmueble (arrendatario)",
+          "event": [
+            { "listen": "test", "script": { "exec": [
+              "const d = pm.response.json().data;",
+              "if (d && d.id) pm.collectionVariables.set('applicationId', d.id);",
+              "pm.test('apply 201', () => pm.response.code === 201);"
+            ], "type": "text/javascript" } }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/properties/5/apply", "host": ["{{baseUrl}}"], "path": ["properties", "5", "apply"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Applications",
+      "item": [
+        {
+          "name": "Aceptar postulación (arrendador)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{arrendadorToken}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"accepted\"\n}" },
+            "url": { "raw": "{{baseUrl}}/applications/{{applicationId}}", "host": ["{{baseUrl}}"], "path": ["applications", "{{applicationId}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Contracts",
+      "item": [
+        {
+          "name": "Generar contrato con IA (SIMULADO si no hay Gemini)",
+          "event": [
+            { "listen": "test", "script": { "exec": [
+              "const d = pm.response.json().data;",
+              "if (d && d.id) pm.collectionVariables.set('contractId', d.id);",
+              "pm.test('contrato 201', () => pm.response.code === 201);"
+            ], "type": "text/javascript" } }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{arrendadorToken}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"applicationId\": {{applicationId}}\n}" },
+            "url": { "raw": "{{baseUrl}}/contracts/generate", "host": ["{{baseUrl}}"], "path": ["contracts", "generate"] }
+          }
+        },
+        {
+          "name": "Ver contrato",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/contracts/{{contractId}}", "host": ["{{baseUrl}}"], "path": ["contracts", "{{contractId}}"] }
+          }
+        },
+        {
+          "name": "Editar borrador",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{arrendadorToken}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"contenido\": \"Contenido editado del contrato...\"\n}" },
+            "url": { "raw": "{{baseUrl}}/contracts/{{contractId}}", "host": ["{{baseUrl}}"], "path": ["contracts", "{{contractId}}"] }
+          }
+        },
+        {
+          "name": "Firmar (arrendatario) — requiere código KYC",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"codigo\": \"{{verificationCode}}\",\n  \"dni\": \"47382910\"\n}" },
+            "url": { "raw": "{{baseUrl}}/contracts/{{contractId}}/sign", "host": ["{{baseUrl}}"], "path": ["contracts", "{{contractId}}", "sign"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Payments",
+      "item": [
+        {
+          "name": "Listar pagos",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/payments", "host": ["{{baseUrl}}"], "path": ["payments"] }
+          }
+        },
+        {
+          "name": "Registrar pago (arrendatario, comisión 5%)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"contractId\": {{contractId}},\n  \"monto\": 2400,\n  \"periodo\": \"2026-07\"\n}" },
+            "url": { "raw": "{{baseUrl}}/payments", "host": ["{{baseUrl}}"], "path": ["payments"] }
+          }
+        },
+        {
+          "name": "Confirmar pago (arrendador)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{arrendadorToken}}" }],
+            "url": { "raw": "{{baseUrl}}/payments/1/confirm", "host": ["{{baseUrl}}"], "path": ["payments", "1", "confirm"] }
+          }
+        },
+        {
+          "name": "Devolver garantía (arrendador)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{arrendadorToken}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"contractId\": {{contractId}}\n}" },
+            "url": { "raw": "{{baseUrl}}/payments/garantia", "host": ["{{baseUrl}}"], "path": ["payments", "garantia"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "System",
+      "item": [
+        {
+          "name": "Health check",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/health", "host": ["{{baseUrl}}"], "path": ["health"] }
+          }
+        }
+      ]
+    }
+  ]
+}

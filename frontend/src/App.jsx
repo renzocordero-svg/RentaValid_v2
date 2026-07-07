@@ -1,6 +1,8 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import Landing       from './pages/Landing'
+import Login         from './pages/Login'
 import Register      from './pages/Register'
+import Dashboard     from './pages/Dashboard'
 import Scoring       from './pages/Scoring'
 import Search        from './pages/Search'
 import PropertyDetail from './pages/PropertyDetail'
@@ -15,7 +17,9 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/"              element={<Landing />} />
+        <Route path="/login"         element={<Login />} />
         <Route path="/registro"      element={<Register />} />
+        <Route path="/dashboard"     element={<Dashboard />} />
         <Route path="/scoring"       element={<Scoring />} />
         <Route path="/inmuebles"     element={<Search />} />
         <Route path="/inmuebles/:id" element={<PropertyDetail />} />

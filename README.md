@@ -163,6 +163,41 @@ El seed también crea **5 inmuebles** en Miraflores, San Isidro, Santiago de Sur
 
 ---
 
+## Modo demo (offline) — qué es real y qué está simulado
+
+El proyecto corre **de punta a punta sin ninguna clave externa**. Cuando una variable de
+entorno de un servicio de terceros no está configurada, ese servicio pasa a **modo simulado**
+automáticamente (no rompe el flujo). Esto permite ejecutar toda la demo solo con Node +
+PostgreSQL local.
+
+| Función | Real (con clave) | Simulado (sin clave) |
+|---|---|---|
+| Registro / Login / Roles | ✅ JWT + bcrypt (siempre real) | — |
+| Base de datos | ✅ Prisma + PostgreSQL (siempre real) | — |
+| Scoring crediticio | ✅ Regla real (tope = 50% del ingreso) | — |
+| Inmuebles (CRUD + búsqueda + postular) | ✅ Real (siempre) | — |
+| Contrato con IA | Gemini (`GEMINI_API_KEY`) | Generador local con las 13 cláusulas + **Ley N° 30933** |
+| Firma digital | ✅ Hash SHA-256 + timestamp (siempre real) | — |
+| Pagos + comisión 5% + garantía | ✅ Real (siempre) | — |
+| Consulta DNI | JSON.pe (`JSONPE_TOKEN`) | Mock RENIEC |
+| Verificación por correo | Gmail (`MAIL_USER`/`MAIL_PASS`) | Código mostrado en pantalla y en consola |
+| Fotos de inmueble | Cloudinary | Imagen placeholder (`picsum.photos`) |
+| Reconocimiento facial | — | Demo (siempre simulado) |
+
+> En modo simulado, el **código de verificación** de 6 dígitos aparece directamente en la
+> pantalla (registro y firma) y en la consola del backend, para poder continuar la demo.
+
+### Guion de la demo (flujo completo)
+
+1. **Registro** de un arrendatario → DNI (autocompleta) → código de correo (simulado) → rostro (demo) → **scoring** (tope de alquiler).
+2. El arrendatario **busca** un inmueble con filtros y **postula**.
+3. El arrendador **acepta** la postulación → se **genera el contrato con IA** (cláusula Ley 30933).
+4. Ambas partes **firman** (DNI + código → hash SHA-256 + sello de tiempo).
+5. En **`/pagos`** se registra el pago con **comisión del 5%** y la devolución de garantía.
+6. **`/dashboard`** muestra el panel por rol (arrendador / arrendatario).
+
+---
+
 ## Scripts disponibles
 
 ### Backend (`cd backend`)
@@ -215,6 +250,12 @@ Tests: 30 passed · Suites: 2 · Time: ~1.5 s
 ---
 
 ## API — Endpoints principales
+
+> **Postman:** importa `backend/RentaValid.postman_collection.json`. Trae el flujo completo
+> de la demo con variables (`baseUrl`, `token`, `arrendadorToken`, `contractId`…) y captura
+> automática de tokens y del código de verificación en modo simulado. La spec OpenAPI está en
+> `backend/openapi.json`.
+
 
 | Método | Ruta | Descripción | Auth |
 |---|---|---|---|

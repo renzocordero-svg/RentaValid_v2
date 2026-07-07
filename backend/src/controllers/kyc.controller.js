@@ -92,6 +92,14 @@ async function enviarCodigo(req, res) {
     return fail(res, 500, 'Error al guardar el código de verificación')
   }
 
+  // ── Modo simulado (sin Gmail configurado) ─────────────────────────────────
+  // Para la demo offline: no se envía correo real; el código se muestra en la
+  // consola del backend y se devuelve en la respuesta para poder continuar.
+  if (!process.env.MAIL_USER || !process.env.MAIL_PASS) {
+    console.log(`\n[KYC] 📧 Correo SIMULADO → ${email}\n[KYC] 🔑 Código de verificación: ${code}\n`)
+    return ok(res, { enviado: true, simulado: true, code })
+  }
+
   // ── Nodemailer (Gmail) ────────────────────────────────────────────────────
   try {
     const transporter = nodemailer.createTransport({

@@ -135,8 +135,9 @@ describe('GET /properties/:id', () => {
 
     expect(res.status).toBe(200)
     expect(res.body.data.id).toBe(1)
-    expect(res.body.data.titulo).toBe('Departamento de prueba')
-    expect(res.body.data.distrito).toBe('Miraflores')
+    // La API expone el spec en inglés (title/district), la BD guarda en español
+    expect(res.body.data.title).toBe('Departamento de prueba')
+    expect(res.body.data.district).toBe('Miraflores')
   })
 
   test('404 — inmueble no encontrado', async () => {
@@ -173,7 +174,7 @@ describe('POST /properties', () => {
 
     expect(res.status).toBe(201)
     expect(res.body.data).toHaveProperty('id')
-    expect(res.body.data.titulo).toBe(newPropertyBody.titulo)
+    expect(res.body.data.title).toBe(newPropertyBody.titulo)
   })
 
   test('400 — faltan campos requeridos', async () => {
@@ -237,7 +238,8 @@ describe('POST /properties/:id/postular', () => {
       .set('Authorization', `Bearer ${arrendatarioToken}`)
 
     expect(res.status).toBe(201)
-    expect(res.body.data.estado).toBe('Pendiente')
+    // mapApplication expone status en inglés: pending | accepted | rejected
+    expect(res.body.data.status).toBe('pending')
     expect(res.body.data.propertyId).toBe(1)
   })
 
