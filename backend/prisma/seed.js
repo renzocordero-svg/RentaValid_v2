@@ -147,12 +147,30 @@ async function main() {
   console.log('🗑️  Datos anteriores eliminados\n')
 
   // ── Roles ──────────────────────────────────────────────────────────────────
-  const [roleArrendador, roleArrendatario] = await Promise.all([
+  const [roleArrendador, roleArrendatario, roleAdmin] = await Promise.all([
     prisma.role.upsert({ where: { nombre: 'Arrendador'   }, update: {}, create: { nombre: 'Arrendador'   } }),
     prisma.role.upsert({ where: { nombre: 'Arrendatario' }, update: {}, create: { nombre: 'Arrendatario' } }),
     prisma.role.upsert({ where: { nombre: 'Admin'        }, update: {}, create: { nombre: 'Admin'        } }),
   ])
   console.log('✅ Roles: Arrendador · Arrendatario · Admin\n')
+
+  // ── Admin ──────────────────────────────────────────────────────────────────
+  const admin = await prisma.user.create({
+    data: {
+      dni:               '00000001',
+      nombre:            'Super',
+      apellidoPaterno:   'Admin',
+      apellidoMaterno:   'RentaValid',
+      email:             'admin@rentavalid.pe',
+      telefono:          '+51 900 000 000',
+      passwordHash:      await bcrypt.hash('Admin1234!', 12),
+      identidadValidada: true,
+      activo:            true,
+      roles:             { create: { roleId: roleAdmin.id } },
+    },
+  })
+  console.log(`✅ Admin       → ${admin.nombre} ${admin.apellidoPaterno} (id ${admin.id})`)
+  console.log(`   Email: admin@rentavalid.pe · Pass: Admin1234!\n`)
 
   // ── Arrendador ─────────────────────────────────────────────────────────────
   const arrendador = await prisma.user.create({
@@ -294,6 +312,7 @@ async function main() {
   console.log('  Credenciales de prueba:')
   console.log('  Arrendador  → carlos.mendoza@rentavalid.pe / Demo1234!')
   console.log('  Arrendatario→ diego.salinas@gmail.com       / Demo1234!')
+  console.log('  Admin       → admin@rentavalid.pe           / Admin1234!')
   console.log('─'.repeat(52))
 }
 

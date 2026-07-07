@@ -11,6 +11,7 @@ import Contract      from './pages/Contract'
 import Sign          from './pages/Sign'
 import Payment       from './pages/Payment'
 import Profile       from './pages/Profile'
+import Admin         from './pages/Admin'
 
 export default function App() {
   return (
@@ -28,6 +29,7 @@ export default function App() {
         <Route path="/firmar/:id"    element={<Sign />} />
         <Route path="/pagos"         element={<Payment />} />
         <Route path="/perfil"        element={<Profile />} />
+        <Route path="/admin"         element={<Admin />} />
       </Routes>
     </BrowserRouter>
   )

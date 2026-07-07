@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   X, LayoutDashboard, Search, CreditCard, Star, User,
   PlusCircle, Building2, LogOut, ChevronRight,
-  FileText, Settings,
+  FileText, Settings, ShieldCheck,
 } from 'lucide-react'
 import Logo from './Logo'
 import { useAuthStore } from '../store/authStore'
@@ -43,6 +43,14 @@ const SECTIONS = [
     items: [
       { icon: User,     label: 'Mi perfil',      href: '/perfil' },
       { icon: Settings, label: 'Configuración',  href: '/perfil' },
+    ],
+  },
+  {
+    key: 'admin',
+    title: 'Administración',
+    roles: ['Admin'],
+    items: [
+      { icon: ShieldCheck, label: 'Panel de Admin', href: '/admin' },
     ],
   },
 ]

@@ -8,6 +8,7 @@ const propertyRoutes    = require('./routes/properties')
 const applicationRoutes = require('./routes/applications')
 const contractRoutes    = require('./routes/contracts')
 const paymentRoutes     = require('./routes/payments')
+const adminRoutes       = require('./routes/admin')
 
 const app = express()
 
@@ -46,6 +47,7 @@ app.use('/properties',   propertyRoutes)
 app.use('/applications', applicationRoutes)
 app.use('/contracts',    contractRoutes)
 app.use('/payments',     paymentRoutes)
+app.use('/admin',        adminRoutes)
 
 // ── 404 catch-all ─────────────────────────────────────────────────────────────
 app.use((_req, res) => res.status(404).json({ error: 'Ruta no encontrada' }))
