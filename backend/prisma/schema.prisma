@@ -62,19 +62,21 @@ enum PaymentEstado {
 // ── User + Role (muchos-a-muchos) ─────────────────────────────────────────────
 
 model User {
-  id                Int      @id @default(autoincrement())
-  dni               String   @unique
+  id                Int       @id @default(autoincrement())
+  dni               String    @unique
   nombre            String
   apellidoPaterno   String
   apellidoMaterno   String
-  email             String   @unique
+  email             String    @unique
   telefono          String
   passwordHash      String
   fotoUrl           String?
-  identidadValidada Boolean  @default(false)
+  identidadValidada Boolean   @default(false)
   ocrDniCoincide    Boolean?
   rostroSimilitud   Float?
-  createdAt         DateTime @default(now())
+  activo            Boolean   @default(true)
+  desactivadoAt     DateTime?
+  createdAt         DateTime  @default(now())
 
   roles            UserRole[]
   properties       Property[]
@@ -82,6 +84,7 @@ model User {
   score            Score?
   signatures       Signature[]
   verificationCode VerificationCode?
+  auditLogs        AuditLog[]
 }
 
 model Role {
@@ -228,4 +231,21 @@ model Payment {
   createdAt  DateTime      @default(now())
 
   contract Contract @relation(fields: [contractId], references: [id])
+}
+
+// ── Auditoría de acciones de administración ──────────────────────────────────
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  adminId   Int
+  accion    String
+  entidad   String
+  entidadId Int?
+  detalle   Json?
+  ip        String?
+  createdAt DateTime @default(now())
+
+  admin User @relation(fields: [adminId], references: [id])
+
+  @@index([entidad, entidadId])
+  @@index([createdAt])
 }

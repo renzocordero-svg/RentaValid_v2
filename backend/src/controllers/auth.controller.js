@@ -131,14 +131,17 @@ async function login(req, res) {
 
     const found = await prisma.user.findUnique({
       where:  { email },
-      select: { ...SELECT_USER, passwordHash: true },
+      select: { ...SELECT_USER, passwordHash: true, activo: true },
     })
 
     if (!found || !(await bcrypt.compare(password, found.passwordHash))) {
       return fail(res, 401, 'Credenciales inválidas')
     }
+    if (!found.activo) {
+      return fail(res, 403, 'Tu cuenta está desactivada. Contacta al administrador.')
+    }
 
-    const { passwordHash: _, ...withoutHash } = found
+    const { passwordHash: _p, activo: _a, ...withoutHash } = found
     const user  = formatUser(withoutHash)
     const token = buildToken(user, user.roles)
     ok(res, { token, user })

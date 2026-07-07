@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   Search, MapPin, Home, Shield, FileCheck, CreditCard,
@@ -7,7 +7,8 @@ import {
 } from 'lucide-react'
 import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
-import { properties, districts } from '../data/mockData'
+import { districts } from '../data/mockData'
+import { propertiesService } from '../services/properties'
 
 function PropertyCard({ property }) {
   return (
@@ -36,9 +37,9 @@ function PropertyCard({ property }) {
           <span>{property.district}</span>
         </div>
         <div className="flex items-center gap-4 mt-3 text-sm text-gray-500">
-          <span>{property.rooms} hab.</span>
+          <span>{property.bedrooms} hab.</span>
           <span>·</span>
-          <span>{property.baths} baños</span>
+          <span>{property.bathrooms} baños</span>
           <span>·</span>
           <span>{property.area} m²</span>
         </div>
@@ -48,7 +49,7 @@ function PropertyCard({ property }) {
             <span className="text-gray-400 text-sm">/mes</span>
           </div>
           <div className="flex items-center gap-1.5">
-            {property.owner.verified && (
+            {property.owner?.identidadValidada && (
               <span className="badge bg-navy/8 text-navy text-[10px]">
                 <Shield size={10} className="text-gold" /> Verificado
               </span>
@@ -138,6 +139,7 @@ const TESTIMONIALS = [
 export default function Landing() {
   const navigate = useNavigate()
   const [search, setSearch] = useState({ district: '', type: '', maxPrice: '' })
+  const [featured, setFeatured] = useState([])
 
   const handleSearch = (e) => {
     e.preventDefault()
@@ -148,7 +150,11 @@ export default function Landing() {
     navigate(`/inmuebles?${params.toString()}`)
   }
 
-  const featured = properties.filter((p) => p.featured)
+  useEffect(() => {
+    propertiesService.listar({ sort: 'recent' })
+      .then((list) => setFeatured(list.slice(0, 3)))
+      .catch(() => setFeatured([]))
+  }, [])
 
   return (
     <div className="min-h-screen">

@@ -4,7 +4,7 @@ const { uploadBuffer } = require('../services/cloudinary')
 
 // ── Selección del propietario en respuestas ───────────────────────────────────
 const SELECT_OWNER = {
-  id: true, nombre: true, apellidoPaterno: true, fotoUrl: true,
+  id: true, nombre: true, apellidoPaterno: true, fotoUrl: true, identidadValidada: true,
 }
 
 // ── Tablas de mapeo de estado Application ────────────────────────────────────

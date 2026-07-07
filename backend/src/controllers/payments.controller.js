@@ -52,7 +52,10 @@ async function listar(req, res) {
               select: {
                 arrendatarioId: true,
                 property: {
-                  select: { id: true, titulo: true, distrito: true, arrendadorId: true },
+                  select: {
+                    id: true, titulo: true, distrito: true, arrendadorId: true,
+                    fotos: { select: { url: true }, orderBy: { orden: 'asc' }, take: 1 },
+                  },
                 },
               },
             },
