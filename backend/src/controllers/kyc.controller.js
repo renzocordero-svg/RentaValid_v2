@@ -1,6 +1,7 @@
 const nodemailer = require('nodemailer')
 const prisma = require('../lib/prisma')
 const { ok, fail } = require('../lib/response')
+const { leerDniDeImagen } = require('../services/ocr')
 
 // ── POST /kyc/dni ─────────────────────────────────────────────────────────────
 /*
@@ -187,47 +188,77 @@ async function verificarEmail(req, res) {
 
 // ── POST /kyc/face ────────────────────────────────────────────────────────────
 /*
-  Recibe la foto del DNI y la selfie del usuario.
-  En producción: comparar con CompreFace u otro servicio biométrico.
-  En MVP: responde { match: true } sin procesar las imágenes.
+  Recibe la foto del DNI y la selfie del usuario, y persiste el resultado de
+  la verificación de identidad.
+
+  - OCR real (tesseract.js, servidor) sobre la foto del DNI: extrae el
+    número de 8 dígitos y lo compara contra el DNI registrado del usuario.
+  - Similitud facial: la calcula el cliente (face-api.js) y la reporta aquí
+    tal cual (0–100 o null).
+  - Advisory: ni un OCR lento/fallido ni una similitud facial baja o nula
+    bloquean al usuario — identidadValidada siempre se marca en true. Solo
+    un error real de persistencia en BD (prisma.user.update) responde 500.
 
   Requiere: authRequired + handleKycFotos (multer)
-  Campos multipart: "dniFoto" (1 imagen) y "selfie" (1 imagen)
+  Campos multipart: "dniFoto" (1 imagen), "selfie" (1 imagen),
+                     "rostroSimilitud" (opcional, número 0–100)
 
   Request:  POST /kyc/face  (multipart/form-data)
             dniFoto: <archivo>
             selfie:  <archivo>
+            rostroSimilitud: "87"
 
-  Response: { "data": { "match": true, "metodo": "demo" } }
+  Response: { "data": { "match": true, "ocr": { "dniLeido": "47382910", "coincide": true }, "rostroSimilitud": 87 } }
 
   Errores:
     400 — faltan imágenes (dniFoto y selfie son requeridas)
+    500 — error al persistir la verificación en BD
 */
 async function verificarRostro(req, res) {
   // Multer coloca los archivos en req.files cuando se usa .fields()
   const dniFoto = req.files?.dniFoto?.[0]
   const selfie  = req.files?.selfie?.[0]
-
   if (!dniFoto || !selfie) {
     return fail(res, 400, 'Se requieren las dos imágenes: dniFoto y selfie')
   }
 
-  /*
-   * TODO: Integrar CompreFace (o servicio RENIEC biométrico) aquí.
-   *
-   * Ejemplo con CompreFace:
-   *   const result = await compareFaces(dniFoto.buffer, selfie.buffer)
-   *   if (result.similarity < 0.8) return fail(res, 422, 'El rostro no coincide con el DNI')
-   *
-   * Por ahora se simula una coincidencia exitosa.
-   */
+  // Similitud facial: la calcula el cliente (face-api.js) y la reporta (advisory).
+  const simRaw = parseFloat(req.body?.rostroSimilitud)
+  const rostroSimilitud = Number.isFinite(simRaw) ? Math.round(simRaw) : null
+
+  // Se busca el usuario fuera del try/catch del OCR para que un error de BD
+  // no se enmascare como "OCR no disponible" en los logs.
+  let user = null
+  try {
+    user = await prisma.user.findUnique({
+      where: { id: req.user.id }, select: { dni: true },
+    })
+  } catch (err) {
+    console.warn('[KYC] No se pudo leer el usuario para comparar DNI →', err.message, '— continúa (advisory)')
+  }
+
+  // OCR del DNI en el servidor (fuente de verdad). Advisory: si falla, no rompe.
+  let ocr = { dniLeido: null, coincide: null }
+  try {
+    const { dniLeido } = await leerDniDeImagen(dniFoto.buffer)
+    ocr = {
+      dniLeido,
+      coincide: dniLeido == null ? null : dniLeido === (user?.dni || '').trim(),
+    }
+  } catch (err) {
+    console.warn('[KYC] OCR no disponible →', err.message, '— continúa (advisory)')
+  }
 
   try {
     await prisma.user.update({
       where: { id: req.user.id },
-      data:  { identidadValidada: true },
+      data: {
+        identidadValidada: true,          // advisory: nunca rechaza
+        ocrDniCoincide:    ocr.coincide,
+        rostroSimilitud,
+      },
     })
-    return ok(res, { match: true, metodo: 'demo' })
+    return ok(res, { match: true, ocr, rostroSimilitud })
   } catch {
     return fail(res, 500, 'Error al registrar la verificación de identidad')
   }
