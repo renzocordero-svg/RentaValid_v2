@@ -1,0 +1,251 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ── Enums ─────────────────────────────────────────────────────────────────────
+
+enum RolNombre {
+  Arrendador
+  Arrendatario
+  Admin
+}
+
+enum PropertyTipo {
+  Departamento
+  Casa
+  Studio
+  Oficina
+}
+
+enum PropertyEstado {
+  Disponible
+  Arrendado
+  Inactivo
+}
+
+enum ApplicationEstado {
+  Pendiente
+  Aceptada
+  Rechazada
+}
+
+enum ScoreDecision {
+  Aprobado
+  Observado
+}
+
+enum ContractEstado {
+  Borrador
+  Activo
+  Firmado
+  Finalizado
+  Cancelado
+}
+
+enum SignatureTipo {
+  Arrendador
+  Arrendatario
+}
+
+enum PaymentEstado {
+  Pendiente
+  Pagado
+  Atrasado
+}
+
+// ── User + Role (muchos-a-muchos) ─────────────────────────────────────────────
+
+model User {
+  id                Int       @id @default(autoincrement())
+  dni               String    @unique
+  nombre            String
+  apellidoPaterno   String
+  apellidoMaterno   String
+  email             String    @unique
+  telefono          String
+  passwordHash      String
+  fotoUrl           String?
+  identidadValidada Boolean   @default(false)
+  ocrDniCoincide    Boolean?
+  rostroSimilitud   Float?
+  activo            Boolean   @default(true)
+  desactivadoAt     DateTime?
+  createdAt         DateTime  @default(now())
+
+  roles            UserRole[]
+  properties       Property[]
+  applications     Application[]
+  score            Score?
+  signatures       Signature[]
+  verificationCode VerificationCode?
+  auditLogs        AuditLog[]
+}
+
+model Role {
+  id     Int       @id @default(autoincrement())
+  nombre RolNombre @unique
+
+  users UserRole[]
+}
+
+model UserRole {
+  userId Int
+  roleId Int
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id])
+
+  @@id([userId, roleId])
+}
+
+// ── Verificación de contacto ──────────────────────────────────────────────────
+
+model VerificationCode {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @unique
+  code      String
+  expiresAt DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ── Inmuebles ─────────────────────────────────────────────────────────────────
+
+model Property {
+  id            Int            @id @default(autoincrement())
+  arrendadorId  Int
+  titulo        String
+  descripcion   String
+  direccion     String
+  distrito      String
+  area          Float
+  habitaciones  Int
+  banos         Int
+  cochera       Boolean        @default(false)
+  amoblado      Boolean        @default(false)
+  precio        Float
+  mesesGarantia Int            @default(2)
+  tipo          PropertyTipo
+  estado        PropertyEstado @default(Disponible)
+  titleDocument String?
+  createdAt     DateTime       @default(now())
+
+  arrendador   User            @relation(fields: [arrendadorId], references: [id])
+  fotos        PropertyPhoto[]
+  applications Application[]
+}
+
+model PropertyPhoto {
+  id         Int    @id @default(autoincrement())
+  propertyId Int
+  url        String
+  orden      Int
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, orden])
+}
+
+// ── Postulaciones ─────────────────────────────────────────────────────────────
+
+model Application {
+  id             Int               @id @default(autoincrement())
+  propertyId     Int
+  arrendatarioId Int
+  estado         ApplicationEstado @default(Pendiente)
+  createdAt      DateTime          @default(now())
+
+  property     Property  @relation(fields: [propertyId], references: [id])
+  arrendatario User      @relation(fields: [arrendatarioId], references: [id])
+  contract     Contract?
+
+  @@unique([propertyId, arrendatarioId])
+}
+
+// ── Scoring crediticio ────────────────────────────────────────────────────────
+
+model Score {
+  id             Int           @id @default(autoincrement())
+  arrendatarioId Int           @unique
+  ingreso        Float
+  topeAlquiler   Float
+  decision       ScoreDecision
+  detalle        Json
+  createdAt      DateTime      @default(now())
+
+  arrendatario User @relation(fields: [arrendatarioId], references: [id])
+}
+
+// ── Contratos ─────────────────────────────────────────────────────────────────
+
+model Contract {
+  id            Int            @id @default(autoincrement())
+  applicationId Int            @unique
+  contenido     String
+  clausulas     Json
+  monto         Float
+  garantia      Float
+  fechaInicio   DateTime
+  fechaFin      DateTime
+  estado        ContractEstado @default(Borrador)
+  hashFirma     String?
+  firmadoAt     DateTime?
+  createdAt     DateTime       @default(now())
+
+  application Application @relation(fields: [applicationId], references: [id])
+  signatures  Signature[]
+  payments    Payment[]
+}
+
+// ── Firmas digitales ──────────────────────────────────────────────────────────
+
+model Signature {
+  id         Int           @id @default(autoincrement())
+  contractId Int
+  userId     Int
+  tipo       SignatureTipo
+  hash       String
+  ip         String
+  createdAt  DateTime      @default(now())
+
+  contract Contract @relation(fields: [contractId], references: [id])
+  user     User     @relation(fields: [userId], references: [id])
+}
+
+// ── Pagos ─────────────────────────────────────────────────────────────────────
+
+model Payment {
+  id         Int           @id @default(autoincrement())
+  contractId Int
+  periodo    String
+  monto      Float
+  comision   Float
+  estado     PaymentEstado @default(Pendiente)
+  fechaPago  DateTime?
+  createdAt  DateTime      @default(now())
+
+  contract Contract @relation(fields: [contractId], references: [id])
+}
+
+// ── Auditoría de acciones de administración ──────────────────────────────────
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  adminId   Int
+  accion    String
+  entidad   String
+  entidadId Int?
+  detalle   Json?
+  ip        String?
+  createdAt DateTime @default(now())
+
+  admin User @relation(fields: [adminId], references: [id])
+
+  @@index([entidad, entidadId])
+  @@index([createdAt])
+}

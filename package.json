@@ -1,0 +1,11 @@
+{
+  "name": "rentavalid-monorepo",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:backend":  "cd backend  && npm run dev",
+    "install:all":  "cd frontend && npm install && cd ../backend && npm install",
+    "build":        "cd frontend && npm run build"
+  }
+}

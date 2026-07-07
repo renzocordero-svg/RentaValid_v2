@@ -1,0 +1,40 @@
+services:
+  - type: web
+    name: rentavalid-api
+    env: node
+    region: oregon
+    plan: free
+    rootDir: backend
+    buildCommand: npm ci && npx prisma db push
+    startCommand: node src/index.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # ── Base de datos (Supabase) ───────────────────────────────────────────────
+      - key: DATABASE_URL
+        sync: false   # lo pegas manualmente en el dashboard de Render
+      # ── Autenticación ─────────────────────────────────────────────────────────
+      - key: JWT_SECRET
+        sync: false
+      # ── Correo (Gmail + contraseña de aplicación) ──────────────────────────────
+      - key: MAIL_USER
+        sync: false
+      - key: MAIL_PASS
+        sync: false
+      # ── IA para contratos (Gemini) ─────────────────────────────────────────────
+      - key: GEMINI_API_KEY
+        sync: false
+      # ── Consulta DNI (JSON.pe) ─────────────────────────────────────────────────
+      - key: JSONPE_TOKEN
+        sync: false
+      # ── Imágenes (Cloudinary) ──────────────────────────────────────────────────
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      # ── CORS: URL del frontend (se actualiza después de desplegar Vercel) ───────
+      - key: FRONTEND_URL
+        sync: false
